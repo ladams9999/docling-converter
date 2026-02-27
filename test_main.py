@@ -94,6 +94,41 @@ def test_resolve_sources_missing_file_adds_error(tmp_path):
     assert errors == [f"File not found: {missing}"]
 
 
+def test_resolve_auto_output_directory_uses_first_local_parent_when_writable(tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+
+    result = main._resolve_auto_output_directory([input_file])
+
+    assert result == tmp_path
+
+
+def test_resolve_auto_output_directory_falls_back_to_downloads_for_url(monkeypatch, tmp_path):
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    monkeypatch.setattr(main, "_get_downloads_directory", lambda: downloads)
+
+    result = main._resolve_auto_output_directory(["https://example.com/test.pdf"])
+
+    assert result == downloads
+
+
+def test_resolve_auto_output_directory_falls_back_when_not_writable(
+    monkeypatch, tmp_path
+):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+
+    monkeypatch.setattr(main, "_is_writable_directory", lambda _directory: False)
+    monkeypatch.setattr(main, "_get_downloads_directory", lambda: downloads)
+
+    result = main._resolve_auto_output_directory([input_file])
+
+    assert result == downloads
+
+
 class _FakeSignal:
     def __init__(self):
         self.callbacks = []
@@ -223,6 +258,47 @@ def test_output_filename_defaults_from_first_input_and_selected_format(qapp, tmp
     window.close()
 
 
+def test_on_sources_changed_autofills_empty_output_dir_and_sets_link(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    assert window.output_dir_edit.text() == ""
+
+    window.input_text.setPlainText(str(input_file))
+
+    assert window.output_dir_edit.text() == str(tmp_path)
+    assert "Open output directory" in window.results_text.toHtml()
+    window.close()
+
+
+def test_on_sources_changed_uses_downloads_for_url_only(qapp, monkeypatch, tmp_path):
+    downloads = tmp_path / "Downloads"
+    downloads.mkdir()
+    monkeypatch.setattr(main, "_get_downloads_directory", lambda: downloads)
+
+    window = main.MainWindow()
+    window.input_text.setPlainText("https://example.com/paper.pdf")
+
+    assert window.output_dir_edit.text() == str(downloads)
+    assert "Open output directory" in window.results_text.toHtml()
+    window.close()
+
+
+def test_on_sources_changed_does_not_override_existing_output_dir(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+    existing_output = tmp_path / "existing"
+    existing_output.mkdir()
+
+    window = main.MainWindow()
+    window.output_dir_edit.setText(str(existing_output))
+    window.input_text.setPlainText(str(input_file))
+
+    assert window.output_dir_edit.text() == str(existing_output)
+    window.close()
+
+
 def test_manual_filename_disables_auto_updates_until_auto_clicked(qapp, tmp_path):
     input_file = tmp_path / "sample.pdf"
     input_file.write_text("x", encoding="utf-8")
@@ -296,6 +372,17 @@ def test_on_finished_uses_markdown_and_html_branches(qapp):
     window._on_finished("html summary", "<h1>Title</h1>")
     assert window.results_text.toPlainText() == "html summary"
     assert "Title" in window.preview_text.toPlainText()
+    window.close()
+
+
+def test_on_finished_includes_output_directory_link_when_directory_exists(qapp, tmp_path):
+    window = main.MainWindow()
+    window.output_dir_edit.setText(str(tmp_path))
+
+    window._on_finished("summary", "preview")
+
+    assert "summary" in window.results_text.toPlainText()
+    assert "Open output directory" in window.results_text.toHtml()
     window.close()
 
 

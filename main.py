@@ -1,6 +1,8 @@
 """Docling Document Converter - PySide6 GUI application."""
 
 import sys
+import tempfile
+from html import escape
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -18,6 +20,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSplitter,
+    QTextBrowser,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -183,6 +186,46 @@ def _resolve_sources(raw_text: str) -> tuple[list, list[str]]:
     return sources, errors
 
 
+def _is_writable_directory(directory: Path) -> bool:
+    """Return True if directory exists and is writable."""
+    if not directory.is_dir():
+        return False
+
+    try:
+        with tempfile.NamedTemporaryFile(dir=directory, delete=True):
+            pass
+        return True
+    except Exception:
+        return False
+
+
+def _get_downloads_directory() -> Path:
+    """Best-effort resolve user's downloads directory."""
+    downloads = Path.home() / "Downloads"
+    if downloads.exists():
+        return downloads
+
+    try:
+        downloads.mkdir(parents=True, exist_ok=True)
+        return downloads
+    except Exception:
+        return Path.home()
+
+
+def _resolve_auto_output_directory(sources: list) -> Path:
+    """Pick output dir from first local source if writable, else Downloads."""
+    fallback = _get_downloads_directory()
+
+    for source in sources:
+        if isinstance(source, Path):
+            candidate = source.parent
+            if _is_writable_directory(candidate):
+                return candidate
+            return fallback
+
+    return fallback
+
+
 # ---------------------------------------------------------------------------
 # Drop-enabled text area
 # ---------------------------------------------------------------------------
@@ -320,8 +363,9 @@ class MainWindow(QMainWindow):
         # --- Results + Preview splitter ---
         splitter = QSplitter(Qt.Orientation.Vertical)
 
-        self.results_text = QPlainTextEdit()
+        self.results_text = QTextBrowser()
         self.results_text.setReadOnly(True)
+        self.results_text.setOpenExternalLinks(True)
         self.results_text.setPlaceholderText("Conversion results will appear here.")
         splitter.addWidget(self.results_text)
 
@@ -374,6 +418,16 @@ class MainWindow(QMainWindow):
             self.filename_edit.setText(filename)
             self._updating_filename = False
 
+    def _set_results_text(self, text: str, output_dir: Path | None = None):
+        if output_dir is None:
+            self.results_text.setPlainText(text)
+            return
+
+        escaped = escape(text).replace("\n", "<br>")
+        output_uri = output_dir.resolve().as_uri()
+        link = f'<br><br><a href="{output_uri}">Open output directory</a>'
+        self.results_text.setHtml(escaped + link)
+
     # --- Slots ---
 
     @Slot()
@@ -403,6 +457,21 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_sources_changed(self):
         self._update_auto_filename()
+
+        if self.output_dir_edit.text().strip():
+            return
+
+        raw = self.input_text.toPlainText().strip()
+        if not raw:
+            return
+
+        sources, _ = _resolve_sources(raw)
+        if not sources:
+            return
+
+        output_dir = _resolve_auto_output_directory(sources)
+        self.output_dir_edit.setText(str(output_dir))
+        self._set_results_text(f"Output directory: {output_dir}", output_dir)
 
     @Slot(str)
     def _on_filename_edited(self, text: str):
@@ -446,7 +515,7 @@ class MainWindow(QMainWindow):
             errors.append("No valid input files resolved.")
 
         if errors:
-            self.results_text.setPlainText(
+            self._set_results_text(
                 "Validation errors:\n\n" + "\n".join(f"  - {e}" for e in errors)
             )
             return
@@ -476,7 +545,13 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.convert_btn.setEnabled(True)
         self.status_label.setText("Done.")
-        self.results_text.setPlainText(summary)
+
+        output_dir_text = self.output_dir_edit.text().strip()
+        output_dir = Path(output_dir_text) if output_dir_text else None
+        if output_dir and output_dir.is_dir():
+            self._set_results_text(summary, output_dir)
+        else:
+            self._set_results_text(summary)
 
         fmt_key = FORMAT_OPTIONS[self.format_combo.currentText()]["key"]
         if fmt_key == "html":

@@ -37,7 +37,7 @@ uv run python main.py
 ### Classes
 
 - **`MainWindow(QMainWindow)`** - Main application window. Builds the UI layout and handles user interactions.
-- **`ConversionWorker(QThread)`** - Background thread that runs docling conversion. Emits `progress` and `finished` signals to update the UI without freezing it.
+- **`ConversionWorker(QThread)`** - Background thread that runs docling conversion. Emits `progress` and `result_ready` signals to update the UI without freezing it.
 - **`FileDropTextEdit(QPlainTextEdit)`** - Custom text area that accepts file drag-and-drop. Overrides `dragEnterEvent`, `dragMoveEvent`, and `dropEvent` to append dropped file paths.
 
 ### Helper functions
@@ -45,6 +45,9 @@ uv run python main.py
 - `_resolve_unique_path(directory, filename)` - Appends `_1`, `_2`, etc. if a file already exists.
 - `_get_source_stem(source)` - Extracts a filename stem from a Path or URL.
 - `_resolve_sources(raw_text)` - Parses user input text into a list of sources (Paths/URLs) and a list of errors.
+- `_is_writable_directory(directory)` - Checks whether a candidate output directory is writable.
+- `_get_downloads_directory()` - Resolves Downloads directory with home-directory fallback.
+- `_resolve_auto_output_directory(sources)` - Chooses output directory from first local source when writable; otherwise Downloads fallback.
 
 ### Constants
 
@@ -59,14 +62,21 @@ uv run python main.py
 3. **Options row** - Format `QComboBox` + filename `QLineEdit`
 4. **Action row** - "Convert" `QPushButton` + indeterminate `QProgressBar`
 5. **Status label** - Shows per-file progress during conversion
-6. **Results/Preview splitter** - `QPlainTextEdit` for results + `QTextEdit` for preview (supports HTML/Markdown rendering)
+6. **Results/Preview splitter** - `QTextBrowser` for results (includes clickable output-directory link) + `QTextEdit` for preview (supports HTML/Markdown rendering)
+
+### Output directory behavior
+
+- If output directory is empty when sources are added, the app auto-selects output directory.
+- For local files/directories: uses the first resolved source directory if writable.
+- For URL-only input or non-writable local directory: falls back to the user's Downloads directory.
+- Results include an **Open output directory** hyperlink that opens in the OS file explorer.
 
 ### Threading model
 
 Conversion runs in `ConversionWorker(QThread)`. The worker:
 1. Imports `DocumentConverter` (heavy, done once per worker)
 2. Iterates over sources, emitting `progress` signals
-3. Emits `finished` with a summary string and the first file's content for preview
+3. Emits `result_ready` with a summary string and the first file's content for preview
 
 The main thread stays responsive during conversion. The Convert button is disabled while a worker is active.
 

@@ -12,7 +12,7 @@ Desktop document converter powered by [Docling](https://github.com/docling-proje
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd docling
+cd docling-converter
 
 # Install dependencies (creates .venv automatically)
 uv sync
@@ -29,10 +29,11 @@ uv run python main.py
 The GUI window provides:
 
 1. **Input file(s)** — paste file paths or URLs (one per line), drag and drop files from Explorer, or click **Browse files** to use the native file picker. Pasting a directory path will find all supported files in it.
-2. **Output directory** — paste a path or click **Browse** to select.
+2. **Output directory** — paste a path or click **Browse** to select. If left empty, adding input sources auto-selects output: first local source directory if writable; otherwise your Downloads directory.
 3. **Export format** — choose from Markdown, HTML, JSON, or DocTags.
 4. **Output filename** (optional) — leave blank to auto-generate from the input filename. Duplicate names get a numeric suffix (`report_1.md`, etc.).
-5. **Convert** — click to start. Conversion runs in a background thread; progress is shown in the status bar. Results and a preview appear at the bottom.
+5. **Convert** — click to start. Conversion runs in a background thread; progress is shown in the status area. Results and a preview appear at the bottom.
+6. **Open output folder link** — results include an **Open output directory** link that opens the selected folder in your OS file explorer.
 
 ## Supported Formats
 
@@ -77,3 +78,10 @@ docling/
 - If Xet is unavailable, downloads automatically fall back to regular HTTP.
 - PDF conversion is computationally intensive. GPU acceleration is used when available.
 - The first import of docling is slow (~10–30s) due to loading PyTorch/Transformers. Subsequent conversions are faster.
+
+## Recent UX behavior changes
+
+- When output directory is empty and input files/URLs are added, the app auto-selects an output directory.
+- For local files/directories, it prefers the first resolved source directory when writable.
+- For URL-only inputs or non-writable local directories, it falls back to your Downloads folder (or home directory if Downloads cannot be created).
+- Conversion results include a clickable directory link for quick folder access.
