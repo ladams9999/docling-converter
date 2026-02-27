@@ -102,7 +102,7 @@ class _FakeSignal:
         self.callbacks.append(callback)
 
 
-class _MockConversionWorker:
+class _MockConversionWorker(main.ConversionWorker):
     instances = []
 
     def __init__(self, sources, output_dir, fmt_info, custom_filename):
@@ -112,17 +112,18 @@ class _MockConversionWorker:
         self.custom_filename = custom_filename
         self.progress = _FakeSignal()
         self.result_ready = _FakeSignal()
-        self.finished = _FakeSignal()
-        self.started = False
+        # Suppress type checking for finished signal override
+        self.finished = _FakeSignal()  # type: ignore
+        self.was_started = False
         _MockConversionWorker.instances.append(self)
 
-    def start(self):
-        self.started = True
+    def start(self, priority=None):
+        self.was_started = True
 
     def isRunning(self):
         return False
 
-    def wait(self, timeout):
+    def wait(self, deadline=5000):  # type: ignore
         return True
 
 
@@ -193,7 +194,7 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     assert worker.output_dir == tmp_path
     assert worker.fmt_info == main.FORMAT_OPTIONS["Markdown (.md)"]
     assert worker.custom_filename == "custom.md"
-    assert worker.started is True
+    assert worker.was_started is True
 
     assert window._worker is worker
     assert window.convert_btn.isEnabled() is False
@@ -247,7 +248,7 @@ def test_on_finished_uses_markdown_and_html_branches(qapp):
 
 def test_on_worker_finished_clears_worker_reference(qapp):
     window = main.MainWindow()
-    window._worker = object()
+    window._worker = _MockConversionWorker([], Path.cwd(), {}, "")
 
     window._on_worker_finished()
 
@@ -256,15 +257,16 @@ def test_on_worker_finished_clears_worker_reference(qapp):
 
 
 def test_close_event_waits_for_running_worker(qapp):
-    class _RunningWorker:
+    class _RunningWorker(main.ConversionWorker):
         def __init__(self):
             self.wait_called_with = None
 
         def isRunning(self):
             return True
 
-        def wait(self, timeout):
-            self.wait_called_with = timeout
+        def wait(self, deadline=5000) -> bool:
+            self.wait_called_with = deadline
+            return True
 
     window = main.MainWindow()
     running_worker = _RunningWorker()
