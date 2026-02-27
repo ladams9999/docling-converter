@@ -234,6 +234,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Docling Document Converter")
         self.setMinimumSize(700, 600)
         self._worker = None
+        self._auto_filename_enabled = True
+        self._last_auto_filename = ""
+        self._updating_filename = False
         self._build_ui()
 
     def _build_ui(self):
@@ -284,11 +287,15 @@ class MainWindow(QMainWindow):
         fmt_inner.addWidget(self.format_combo)
         options_layout.addWidget(fmt_group)
 
-        fname_group = QGroupBox("Output filename (blank = auto)")
+        fname_group = QGroupBox("Output filename")
         fname_inner = QVBoxLayout(fname_group)
+        fname_row = QHBoxLayout()
         self.filename_edit = QLineEdit()
-        self.filename_edit.setPlaceholderText("(auto-generated from input)")
-        fname_inner.addWidget(self.filename_edit)
+        fname_row.addWidget(self.filename_edit)
+        self.auto_filename_btn = QPushButton("Auto")
+        self.auto_filename_btn.clicked.connect(self._on_auto_filename_clicked)
+        fname_row.addWidget(self.auto_filename_btn)
+        fname_inner.addLayout(fname_row)
         options_layout.addWidget(fname_group)
 
         layout.addLayout(options_layout)
@@ -326,6 +333,47 @@ class MainWindow(QMainWindow):
         splitter.setSizes([150, 300])
         layout.addWidget(splitter, stretch=1)
 
+        self.format_combo.currentTextChanged.connect(self._on_format_changed)
+        self.input_text.textChanged.connect(self._on_sources_changed)
+        self.filename_edit.textEdited.connect(self._on_filename_edited)
+        self._apply_auto_filename()
+
+    def _get_default_output_filename(self) -> str:
+        format_label = self.format_combo.currentText()
+        ext = FORMAT_OPTIONS[format_label]["ext"]
+        raw = self.input_text.toPlainText().strip()
+
+        if raw:
+            sources, _ = _resolve_sources(raw)
+            if sources:
+                return f"{_get_source_stem(sources[0])}{ext}"
+
+            first_line = next((line.strip() for line in raw.splitlines() if line.strip()), "")
+            if first_line:
+                if first_line.startswith("http://") or first_line.startswith("https://"):
+                    stem = _get_source_stem(first_line)
+                else:
+                    stem = Path(first_line).stem or "document"
+                return f"{stem}{ext}"
+
+        return f"document{ext}"
+
+    def _apply_auto_filename(self):
+        filename = self._get_default_output_filename()
+        self._last_auto_filename = filename
+        self._updating_filename = True
+        self.filename_edit.setText(filename)
+        self._updating_filename = False
+
+    def _update_auto_filename(self):
+        filename = self._get_default_output_filename()
+        self._last_auto_filename = filename
+        if self._auto_filename_enabled or not self.filename_edit.text().strip():
+            self._auto_filename_enabled = True
+            self._updating_filename = True
+            self.filename_edit.setText(filename)
+            self._updating_filename = False
+
     # --- Slots ---
 
     @Slot()
@@ -347,6 +395,31 @@ class MainWindow(QMainWindow):
         )
         if directory:
             self.output_dir_edit.setText(directory)
+
+    @Slot(str)
+    def _on_format_changed(self, _text: str):
+        self._update_auto_filename()
+
+    @Slot()
+    def _on_sources_changed(self):
+        self._update_auto_filename()
+
+    @Slot(str)
+    def _on_filename_edited(self, text: str):
+        if self._updating_filename:
+            return
+
+        if not text.strip():
+            self._auto_filename_enabled = True
+            self._apply_auto_filename()
+            return
+
+        self._auto_filename_enabled = False
+
+    @Slot()
+    def _on_auto_filename_clicked(self):
+        self._auto_filename_enabled = True
+        self._apply_auto_filename()
 
     @Slot()
     def _start_conversion(self):

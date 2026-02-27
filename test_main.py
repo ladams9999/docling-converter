@@ -208,6 +208,59 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     window.close()
 
 
+def test_output_filename_defaults_from_first_input_and_selected_format(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    assert window.filename_edit.text() == "document.md"
+
+    window.input_text.setPlainText(str(input_file))
+    assert window.filename_edit.text() == "sample.md"
+
+    window.format_combo.setCurrentText("JSON (.json)")
+    assert window.filename_edit.text() == "sample.json"
+    window.close()
+
+
+def test_manual_filename_disables_auto_updates_until_auto_clicked(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    window.input_text.setPlainText(str(input_file))
+    assert window.filename_edit.text() == "sample.md"
+
+    window.filename_edit.setText("custom-name.md")
+    window._on_filename_edited("custom-name.md")
+
+    window.format_combo.setCurrentText("HTML (.html)")
+    assert window.filename_edit.text() == "custom-name.md"
+
+    window.auto_filename_btn.click()
+    assert window.filename_edit.text() == "sample.html"
+    window.close()
+
+
+def test_blank_manual_edit_reenables_auto_filename(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    window.input_text.setPlainText(str(input_file))
+
+    window.filename_edit.setText("custom-name.md")
+    window._on_filename_edited("custom-name.md")
+    window.filename_edit.setText("")
+    window._on_filename_edited("")
+
+    assert window.filename_edit.text() == "sample.md"
+
+    window.format_combo.setCurrentText("DocTags (.doctags)")
+    assert window.filename_edit.text() == "sample.doctags"
+    window.close()
+
+
 def test_on_finished_sets_done_state_and_plain_preview_for_json_doctags(qapp):
     window = main.MainWindow()
     window.convert_btn.setEnabled(False)

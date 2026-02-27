@@ -48,6 +48,12 @@ uv run pytest -q
   - worker reference cleanup
 - `MainWindow.closeEvent`
   - waits on active worker thread before close
+- Output filename auto-mode UX
+  - default filename generation from first input source + selected export format
+  - format changes update filename while auto mode is enabled
+  - manual filename edits disable auto updates
+  - `Auto` button restores generated default and re-enables auto mode
+  - clearing the filename re-enables auto mode
 
 ## User flows not under test
 
@@ -59,3 +65,4 @@ The following are intentionally outside this unit test scope and should be verif
 - Drag-and-drop event behavior in `FileDropTextEdit`
 - Full end-to-end threading timing/race behavior under heavy conversion loads
 - Visual rendering fidelity details of rich preview content across formats
+- Full interactive GUI click-flow verification of filename auto/manual mode transitions
