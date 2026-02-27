@@ -373,9 +373,16 @@ class MainWindow(QMainWindow):
         self.input_text.setMaximumHeight(120)
         input_layout.addWidget(self.input_text)
 
+        # Browse and Clear buttons in a horizontal layout
+        input_btn_layout = QHBoxLayout()
         browse_btn = QPushButton("Browse files...")
         browse_btn.clicked.connect(self._browse_input_files)
-        input_layout.addWidget(browse_btn)
+        input_btn_layout.addWidget(browse_btn)
+
+        self.clear_input_btn = QPushButton("Clear")
+        self.clear_input_btn.clicked.connect(self._clear_input_files)
+        input_btn_layout.addWidget(self.clear_input_btn)
+        input_layout.addLayout(input_btn_layout)
         layout.addWidget(input_group)
 
         # --- Output directory ---
@@ -556,6 +563,10 @@ class MainWindow(QMainWindow):
             )
 
     @Slot()
+    def _clear_input_files(self):
+        self.input_text.setPlainText("")
+
+    @Slot()
     def _browse_output_dir(self):
         directory = QFileDialog.getExistingDirectory(
             self, "Select output directory"
@@ -643,6 +654,7 @@ class MainWindow(QMainWindow):
         # Start worker
         fmt_info = FORMAT_OPTIONS[format_label]
         self.convert_btn.setEnabled(False)
+        self.clear_input_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self._populate_results_table([])
         self.open_folder_btn.setVisible(False)
@@ -666,6 +678,7 @@ class MainWindow(QMainWindow):
     def _on_finished(self, payload: dict, preview: str):
         self.progress_bar.setVisible(False)
         self.convert_btn.setEnabled(True)
+        self.clear_input_btn.setEnabled(True)
 
         rows = payload.get("rows", [])
         has_errors = any(row.get("severity") == "error" for row in rows)
