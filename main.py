@@ -6,7 +6,8 @@ from html import escape
 from pathlib import Path
 from urllib.parse import urlparse
 
-from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtCore import QUrl, Qt, QThread, Signal, Slot
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -280,6 +281,7 @@ class MainWindow(QMainWindow):
         self._auto_filename_enabled = True
         self._last_auto_filename = ""
         self._updating_filename = False
+        self._last_output_dir: Path | None = None
         self._build_ui()
 
     def _build_ui(self):
@@ -356,9 +358,16 @@ class MainWindow(QMainWindow):
         action_layout.addWidget(self.progress_bar)
         layout.addLayout(action_layout)
 
-        # --- Status label ---
+        # --- Status label + open folder button ---
+        status_row = QHBoxLayout()
         self.status_label = QLabel("")
-        layout.addWidget(self.status_label)
+        status_row.addWidget(self.status_label, stretch=1)
+
+        self.open_folder_btn = QPushButton("Open output folder")
+        self.open_folder_btn.setVisible(False)
+        self.open_folder_btn.clicked.connect(self._open_output_folder)
+        status_row.addWidget(self.open_folder_btn)
+        layout.addLayout(status_row)
 
         # --- Results + Preview splitter ---
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -491,6 +500,11 @@ class MainWindow(QMainWindow):
         self._apply_auto_filename()
 
     @Slot()
+    def _open_output_folder(self):
+        if self._last_output_dir and self._last_output_dir.is_dir():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_output_dir)))
+
+    @Slot()
     def _start_conversion(self):
         raw = self.input_text.toPlainText().strip()
         output_dir_str = self.output_dir_edit.text().strip()
@@ -526,6 +540,8 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(True)
         self.results_text.clear()
         self.preview_text.clear()
+        self.open_folder_btn.setVisible(False)
+        self.status_label.setStyleSheet("")
 
         assert output_dir is not None  # guaranteed by validation above
         self._worker = ConversionWorker(
@@ -538,19 +554,32 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_progress(self, message: str):
+        self.status_label.setStyleSheet("color: palette(text);")
         self.status_label.setText(message)
 
     @Slot(str, str)
     def _on_finished(self, summary: str, preview: str):
         self.progress_bar.setVisible(False)
         self.convert_btn.setEnabled(True)
-        self.status_label.setText("Done.")
+
+        has_errors = any(
+            line.strip().startswith("ERROR") for line in summary.splitlines()
+        )
+        if has_errors:
+            self.status_label.setStyleSheet("color: red;")
+            self.status_label.setText("Done with errors.")
+        else:
+            self.status_label.setStyleSheet("color: green;")
+            self.status_label.setText("Done.")
 
         output_dir_text = self.output_dir_edit.text().strip()
         output_dir = Path(output_dir_text) if output_dir_text else None
         if output_dir and output_dir.is_dir():
+            self._last_output_dir = output_dir
+            self.open_folder_btn.setVisible(True)
             self._set_results_text(summary, output_dir)
         else:
+            self._last_output_dir = None
             self._set_results_text(summary)
 
         fmt_key = FORMAT_OPTIONS[self.format_combo.currentText()]["key"]
