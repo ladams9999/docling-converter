@@ -73,5 +73,7 @@ docling/
 ## Notes
 
 - Docling downloads AI model weights from Hugging Face on first conversion. This may take a few minutes and requires internet access.
+- This project includes `hf-xet` to improve Hugging Face model download performance when Xet-backed storage is available.
+- If Xet is unavailable, downloads automatically fall back to regular HTTP.
 - PDF conversion is computationally intensive. GPU acceleration is used when available.
 - The first import of docling is slow (~10–30s) due to loading PyTorch/Transformers. Subsequent conversions are faster.
