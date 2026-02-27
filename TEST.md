@@ -49,8 +49,9 @@ uv run pytest -q
   - existing non-empty output directory is never auto-overwritten
 - `MainWindow._on_finished`
   - done-state UI changes
-  - preview behavior for HTML/Markdown/plain-text paths
-  - results include an "Open output directory" link when output directory exists
+  - preview text update behavior for HTML/Markdown/plain-text paths
+  - results table population (`Status`, `Source`, `Target`)
+  - `Open output directory` button visibility when output directory exists
 - `MainWindow._on_worker_finished`
   - worker reference cleanup
 - `MainWindow.closeEvent`
@@ -71,7 +72,7 @@ The following are intentionally outside this unit test scope and should be verif
 - Native dialog UX (`QFileDialog.getOpenFileNames`, `getExistingDirectory`)
 - Drag-and-drop event behavior in `FileDropTextEdit`
 - Full end-to-end threading timing/race behavior under heavy conversion loads
-- Visual rendering fidelity details of rich preview content across formats
+- Visual rendering fidelity details of rich preview content across formats (preview pane is currently hidden by feature flag)
 - Full interactive GUI click-flow verification of filename auto/manual mode transitions
 
 ## Manual smoke checks for latest output-directory UX
@@ -92,5 +93,6 @@ Verify these behaviors interactively:
   - Expected: output directory falls back to `~/Downloads` (or home fallback).
 4. Set output directory manually, then add new sources.
   - Expected: manual output directory remains unchanged.
-5. Convert a file and click "Open output directory" in results.
+5. Convert a file and click **Open output directory** beside the output directory display row.
   - Expected: OS file explorer opens that directory.
+6. Confirm results table rows show status icon, full source path/URL, and target filename.

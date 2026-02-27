@@ -2,7 +2,7 @@
 
 import sys
 import tempfile
-from html import escape
+import warnings
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -10,6 +10,7 @@ from PySide6.QtCore import QUrl, Qt, QThread, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
+    QAbstractItemView,
     QComboBox,
     QFileDialog,
     QGroupBox,
@@ -23,6 +24,9 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTextBrowser,
     QTextEdit,
+    QHeaderView,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -54,6 +58,12 @@ FILE_FILTER = (
     "LaTeX (*.tex);;Markdown (*.md);;All files (*)"
 )
 
+SHOW_PREVIEW_PANEL = False
+
+STATUS_ICON_SUCCESS = "✅"
+STATUS_ICON_WARNING = "🟨"
+STATUS_ICON_ERROR = "🛑"
+
 
 # ---------------------------------------------------------------------------
 # Worker thread for conversion
@@ -64,7 +74,7 @@ class ConversionWorker(QThread):
     """Runs docling conversion off the main thread."""
 
     progress = Signal(str)  # status message per file
-    result_ready = Signal(str, str)  # (results_summary, first_preview_content)
+    result_ready = Signal(object, str)  # (results_payload, first_preview_content)
 
     def __init__(
         self,
@@ -83,16 +93,24 @@ class ConversionWorker(QThread):
         from docling.document_converter import DocumentConverter
 
         converter = DocumentConverter()
-        results = []
+        rows = []
+        summary_lines = []
         first_preview = ""
 
         for i, src in enumerate(self.sources, 1):
-            src_label = Path(src).name if isinstance(src, Path) else src
+            src_label = str(src.resolve()) if isinstance(src, Path) else src
             self.progress.emit(
                 f"Converting {i}/{len(self.sources)}: {src_label}..."
             )
+            target_name = ""
+            severity = "success"
+            row_messages: list[str] = []
+
             try:
-                result = converter.convert(str(src))
+                with warnings.catch_warnings(record=True) as captured_warnings:
+                    warnings.simplefilter("always")
+                    result = converter.convert(str(src))
+
                 doc = result.document
 
                 key = self.fmt_info["key"]
@@ -115,20 +133,90 @@ class ConversionWorker(QThread):
 
                 out_path = _resolve_unique_path(self.output_dir, fname)
                 out_path.write_text(content, encoding="utf-8")
+                target_name = out_path.name
 
-                results.append(f"  {src_label}  ->  {out_path.name}")
+                result_status = str(getattr(result, "status", "")).lower()
+                result_errors = list(getattr(result, "errors", []) or [])
+
+                if captured_warnings:
+                    severity = "warning"
+                    row_messages.extend(str(w.message) for w in captured_warnings)
+
+                if result_errors:
+                    row_messages.extend(str(item) for item in result_errors)
+                    if any(token in result_status for token in ("fail", "fatal", "error")):
+                        severity = "error"
+                        raise RuntimeError(
+                            "; ".join(str(item) for item in result_errors)
+                        )
+                    severity = "warning"
+                elif any(token in result_status for token in ("warn", "partial")):
+                    severity = "warning"
+
+                rows.append(
+                    {
+                        "severity": severity,
+                        "source": src_label,
+                        "target": target_name,
+                        "messages": row_messages,
+                    }
+                )
+
+                icon = _severity_icon(severity)
+                summary_lines.append(f"{icon}  {src_label}  ->  {target_name}")
 
                 if not first_preview:
                     first_preview = content
 
             except Exception as e:
-                results.append(f"  ERROR  {src_label}: {e}")
+                rows.append(
+                    {
+                        "severity": "error",
+                        "source": src_label,
+                        "target": target_name,
+                        "messages": [str(e)],
+                    }
+                )
+                icon = _severity_icon("error")
+                summary_lines.append(f"{icon}  {src_label}  ->  {target_name} ({e})")
 
-        summary = (
-            f"Output directory: {self.output_dir}\n\n"
-            + "\n".join(results)
-        )
-        self.result_ready.emit(summary, first_preview)
+        payload = {
+            "rows": rows,
+            "summary": "\n".join(summary_lines),
+            "has_errors": any(row["severity"] == "error" for row in rows),
+            "output_dir": str(self.output_dir),
+        }
+        self.result_ready.emit(payload, first_preview)
+
+
+def _severity_icon(severity: str) -> str:
+    if severity == "error":
+        return STATUS_ICON_ERROR
+    if severity == "warning":
+        return STATUS_ICON_WARNING
+    return STATUS_ICON_SUCCESS
+
+
+def _severity_label(severity: str) -> str:
+    if severity == "error":
+        return "Error"
+    if severity == "warning":
+        return "Warning"
+    return "OK"
+
+
+def _build_results_text(payload: dict) -> str:
+    summary = payload.get("summary", "").strip()
+    if summary:
+        return summary
+
+    lines = []
+    for row in payload.get("rows", []):
+        icon = _severity_icon(row.get("severity", "success"))
+        source = row.get("source", "")
+        target = row.get("target", "")
+        lines.append(f"{icon}  {source}  ->  {target}")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -361,35 +449,70 @@ class MainWindow(QMainWindow):
         # --- Status label + open folder button ---
         status_row = QHBoxLayout()
         self.status_label = QLabel("")
-        status_row.addWidget(self.status_label, stretch=1)
+        status_row.addWidget(self.status_label)
+        status_row.addStretch(1)
 
-        self.open_folder_btn = QPushButton("Open output folder")
-        self.open_folder_btn.setVisible(False)
-        self.open_folder_btn.clicked.connect(self._open_output_folder)
-        status_row.addWidget(self.open_folder_btn)
         layout.addLayout(status_row)
 
+        output_dir_row = QHBoxLayout()
+        self.output_dir_display_label = QLabel("Output directory: (not set)")
+        output_dir_row.addWidget(self.output_dir_display_label, stretch=1)
+
+        self.open_folder_btn = QPushButton("Open output directory")
+        self.open_folder_btn.setVisible(False)
+        self.open_folder_btn.clicked.connect(self._open_output_folder)
+        output_dir_row.addWidget(self.open_folder_btn)
+        layout.addLayout(output_dir_row)
+
         # --- Results + Preview splitter ---
-        splitter = QSplitter(Qt.Orientation.Vertical)
+        results_panel = QWidget()
+        results_panel_layout = QVBoxLayout(results_panel)
+
+        self.results_table = QTableWidget(0, 3)
+        self.results_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
+        self.results_table.verticalHeader().setVisible(False)
+        self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.results_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.results_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setWordWrap(False)
+        self.results_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.results_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        header = self.results_table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.results_table.setColumnWidth(0, 110)
+        self.results_table.setColumnWidth(2, 220)
+        results_panel_layout.addWidget(self.results_table)
 
         self.results_text = QTextBrowser()
         self.results_text.setReadOnly(True)
         self.results_text.setOpenExternalLinks(True)
         self.results_text.setPlaceholderText("Conversion results will appear here.")
-        splitter.addWidget(self.results_text)
+        results_panel_layout.addWidget(self.results_text)
 
         self.preview_text = QTextEdit()
         self.preview_text.setReadOnly(True)
         self.preview_text.setPlaceholderText("Preview of converted content.")
-        splitter.addWidget(self.preview_text)
 
-        splitter.setSizes([150, 300])
-        layout.addWidget(splitter, stretch=1)
+        if SHOW_PREVIEW_PANEL:
+            splitter = QSplitter(Qt.Orientation.Vertical)
+            splitter.addWidget(results_panel)
+            splitter.addWidget(self.preview_text)
+            splitter.setSizes([250, 300])
+            layout.addWidget(splitter, stretch=1)
+        else:
+            self.preview_text.setVisible(False)
+            layout.addWidget(results_panel, stretch=1)
 
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
         self.input_text.textChanged.connect(self._on_sources_changed)
+        self.output_dir_edit.textChanged.connect(self._on_output_dir_changed)
         self.filename_edit.textEdited.connect(self._on_filename_edited)
         self._apply_auto_filename()
+        self._refresh_output_directory_display()
 
     def _get_default_output_filename(self) -> str:
         format_label = self.format_combo.currentText()
@@ -427,15 +550,40 @@ class MainWindow(QMainWindow):
             self.filename_edit.setText(filename)
             self._updating_filename = False
 
-    def _set_results_text(self, text: str, output_dir: Path | None = None):
-        if output_dir is None:
-            self.results_text.setPlainText(text)
-            return
+    def _set_results_text(self, text: str):
+        self.results_text.setPlainText(text)
 
-        escaped = escape(text).replace("\n", "<br>")
-        output_uri = output_dir.resolve().as_uri()
-        link = f'<br><br><a href="{output_uri}">Open output directory</a>'
-        self.results_text.setHtml(escaped + link)
+    def _refresh_output_directory_display(self):
+        output_dir_text = self.output_dir_edit.text().strip()
+        if output_dir_text:
+            self.output_dir_display_label.setText(f"Output directory: {output_dir_text}")
+        else:
+            self.output_dir_display_label.setText("Output directory: (not set)")
+
+    def _populate_results_table(self, rows: list[dict]):
+        self.results_table.setRowCount(0)
+
+        for row_data in rows:
+            row_idx = self.results_table.rowCount()
+            self.results_table.insertRow(row_idx)
+
+            severity = row_data.get("severity", "success")
+            icon = _severity_icon(severity)
+            label = _severity_label(severity)
+            status_item = QTableWidgetItem(f"{icon} {label}")
+            source_item = QTableWidgetItem(row_data.get("source", ""))
+            target_item = QTableWidgetItem(row_data.get("target", ""))
+
+            messages = row_data.get("messages", [])
+            if messages:
+                tooltip = "\n".join(messages)
+                status_item.setToolTip(tooltip)
+                source_item.setToolTip(tooltip)
+                target_item.setToolTip(tooltip)
+
+            self.results_table.setItem(row_idx, 0, status_item)
+            self.results_table.setItem(row_idx, 1, source_item)
+            self.results_table.setItem(row_idx, 2, target_item)
 
     # --- Slots ---
 
@@ -480,7 +628,11 @@ class MainWindow(QMainWindow):
 
         output_dir = _resolve_auto_output_directory(sources)
         self.output_dir_edit.setText(str(output_dir))
-        self._set_results_text(f"Output directory: {output_dir}", output_dir)
+        self._set_results_text(f"Output directory auto-selected: {output_dir}")
+
+    @Slot(str)
+    def _on_output_dir_changed(self, _text: str):
+        self._refresh_output_directory_display()
 
     @Slot(str)
     def _on_filename_edited(self, text: str):
@@ -532,6 +684,7 @@ class MainWindow(QMainWindow):
             self._set_results_text(
                 "Validation errors:\n\n" + "\n".join(f"  - {e}" for e in errors)
             )
+            self._populate_results_table([])
             return
 
         # Start worker
@@ -539,6 +692,7 @@ class MainWindow(QMainWindow):
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.results_text.clear()
+        self._populate_results_table([])
         self.preview_text.clear()
         self.open_folder_btn.setVisible(False)
         self.status_label.setStyleSheet("")
@@ -557,14 +711,13 @@ class MainWindow(QMainWindow):
         self.status_label.setStyleSheet("color: palette(text);")
         self.status_label.setText(message)
 
-    @Slot(str, str)
-    def _on_finished(self, summary: str, preview: str):
+    @Slot(object, str)
+    def _on_finished(self, payload: dict, preview: str):
         self.progress_bar.setVisible(False)
         self.convert_btn.setEnabled(True)
 
-        has_errors = any(
-            line.strip().startswith("ERROR") for line in summary.splitlines()
-        )
+        rows = payload.get("rows", [])
+        has_errors = any(row.get("severity") == "error" for row in rows)
         if has_errors:
             self.status_label.setStyleSheet("color: red;")
             self.status_label.setText("Done with errors.")
@@ -572,15 +725,16 @@ class MainWindow(QMainWindow):
             self.status_label.setStyleSheet("color: green;")
             self.status_label.setText("Done.")
 
-        output_dir_text = self.output_dir_edit.text().strip()
+        output_dir_text = payload.get("output_dir", "")
         output_dir = Path(output_dir_text) if output_dir_text else None
         if output_dir and output_dir.is_dir():
             self._last_output_dir = output_dir
             self.open_folder_btn.setVisible(True)
-            self._set_results_text(summary, output_dir)
         else:
             self._last_output_dir = None
-            self._set_results_text(summary)
+
+        self._populate_results_table(rows)
+        self._set_results_text(_build_results_text(payload))
 
         fmt_key = FORMAT_OPTIONS[self.format_combo.currentText()]["key"]
         if fmt_key == "html":

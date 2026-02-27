@@ -268,7 +268,7 @@ def test_on_sources_changed_autofills_empty_output_dir_and_sets_link(qapp, tmp_p
     window.input_text.setPlainText(str(input_file))
 
     assert window.output_dir_edit.text() == str(tmp_path)
-    assert "Open output directory" in window.results_text.toHtml()
+    assert window.output_dir_display_label.text() == f"Output directory: {tmp_path}"
     window.close()
 
 
@@ -281,7 +281,7 @@ def test_on_sources_changed_uses_downloads_for_url_only(qapp, monkeypatch, tmp_p
     window.input_text.setPlainText("https://example.com/paper.pdf")
 
     assert window.output_dir_edit.text() == str(downloads)
-    assert "Open output directory" in window.results_text.toHtml()
+    assert window.output_dir_display_label.text() == f"Output directory: {downloads}"
     window.close()
 
 
@@ -342,18 +342,36 @@ def test_on_finished_sets_done_state_and_plain_preview_for_json_doctags(qapp):
     window.convert_btn.setEnabled(False)
     window.progress_bar.setVisible(True)
 
+    payload = {
+        "rows": [
+            {
+                "severity": "success",
+                "source": "C:/docs/a.pdf",
+                "target": "a.json",
+                "messages": [],
+            }
+        ],
+        "summary": "✅  C:/docs/a.pdf  ->  a.json",
+        "has_errors": False,
+        "output_dir": "",
+    }
+
     window.format_combo.setCurrentText("JSON (.json)")
-    window._on_finished("summary", "json preview")
+    window._on_finished(payload, "json preview")
     assert window.status_label.text() == "Done."
     assert window.convert_btn.isEnabled() is True
     assert window.progress_bar.isVisible() is False
-    assert window.results_text.toPlainText() == "summary"
+    assert window.results_text.toPlainText() == "✅  C:/docs/a.pdf  ->  a.json"
+    assert window.results_table.rowCount() == 1
+    assert "OK" in window.results_table.item(0, 0).text()
+    assert window.results_table.item(0, 1).text() == "C:/docs/a.pdf"
+    assert window.results_table.item(0, 2).text() == "a.json"
     assert window.preview_text.toPlainText() == "json preview"
 
     window.convert_btn.setEnabled(False)
     window.progress_bar.setVisible(True)
     window.format_combo.setCurrentText("DocTags (.doctags)")
-    window._on_finished("summary2", "tags preview")
+    window._on_finished(payload, "tags preview")
     assert window.status_label.text() == "Done."
     assert window.convert_btn.isEnabled() is True
     assert window.progress_bar.isVisible() is False
@@ -363,14 +381,27 @@ def test_on_finished_sets_done_state_and_plain_preview_for_json_doctags(qapp):
 
 def test_on_finished_uses_markdown_and_html_branches(qapp):
     window = main.MainWindow()
+    payload = {
+        "rows": [
+            {
+                "severity": "success",
+                "source": "C:/docs/a.pdf",
+                "target": "a.md",
+                "messages": [],
+            }
+        ],
+        "summary": "✅  C:/docs/a.pdf  ->  a.md",
+        "has_errors": False,
+        "output_dir": "",
+    }
 
     window.format_combo.setCurrentText("Markdown (.md)")
-    window._on_finished("md summary", "# title")
-    assert window.results_text.toPlainText() == "md summary"
+    window._on_finished(payload, "# title")
+    assert window.results_text.toPlainText() == "✅  C:/docs/a.pdf  ->  a.md"
 
     window.format_combo.setCurrentText("HTML (.html)")
-    window._on_finished("html summary", "<h1>Title</h1>")
-    assert window.results_text.toPlainText() == "html summary"
+    window._on_finished(payload, "<h1>Title</h1>")
+    assert window.results_text.toPlainText() == "✅  C:/docs/a.pdf  ->  a.md"
     assert "Title" in window.preview_text.toPlainText()
     window.close()
 
@@ -379,10 +410,34 @@ def test_on_finished_includes_output_directory_link_when_directory_exists(qapp, 
     window = main.MainWindow()
     window.output_dir_edit.setText(str(tmp_path))
 
-    window._on_finished("summary", "preview")
+    payload = {
+        "rows": [
+            {
+                "severity": "success",
+                "source": str(tmp_path / "sample.pdf"),
+                "target": "sample.md",
+                "messages": [],
+            }
+        ],
+        "summary": "✅  sample",
+        "has_errors": False,
+        "output_dir": str(tmp_path),
+    }
 
-    assert "summary" in window.results_text.toPlainText()
-    assert "Open output directory" in window.results_text.toHtml()
+    window._on_finished(payload, "preview")
+
+    assert "✅  sample" in window.results_text.toPlainText()
+    assert window.open_folder_btn.isHidden() is False
+    assert window.open_folder_btn.text() == "Open output directory"
+    assert window.output_dir_display_label.text() == f"Output directory: {tmp_path}"
+    window.close()
+
+
+def test_preview_panel_hidden_by_flag(qapp):
+    window = main.MainWindow()
+
+    assert main.SHOW_PREVIEW_PANEL is False
+    assert window.preview_text.isVisible() is False
     window.close()
 
 

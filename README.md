@@ -32,8 +32,9 @@ The GUI window provides:
 2. **Output directory** — paste a path or click **Browse** to select. If left empty, adding input sources auto-selects output: first local source directory if writable; otherwise your Downloads directory.
 3. **Export format** — choose from Markdown, HTML, JSON, or DocTags.
 4. **Output filename** (optional) — leave blank to auto-generate from the input filename. Duplicate names get a numeric suffix (`report_1.md`, etc.).
-5. **Convert** — click to start. Conversion runs in a background thread; progress is shown in the status area. Results and a preview appear at the bottom.
-6. **Open output folder link** — results include an **Open output directory** link that opens the selected folder in your OS file explorer.
+5. **Convert** — click to start. Conversion runs in a background thread; progress is shown in the status area.
+6. **Output directory display** — shown as a dedicated row below the status area, with an **Open output directory** button beside it.
+7. **Results panel** — includes a table with **Status**, **Source**, and **Target** columns plus a text summary below it.
 
 ## Supported Formats
 
@@ -84,4 +85,6 @@ docling/
 - When output directory is empty and input files/URLs are added, the app auto-selects an output directory.
 - For local files/directories, it prefers the first resolved source directory when writable.
 - For URL-only inputs or non-writable local directories, it falls back to your Downloads folder (or home directory if Downloads cannot be created).
-- Conversion results include a clickable directory link for quick folder access.
+- Conversion results now include a column view (`Status`, `Source`, `Target`) and a text summary.
+- Output directory is shown in a dedicated display row with an **Open output directory** button.
+- Preview pane is currently hidden behind a temporary feature flag.
