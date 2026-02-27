@@ -21,9 +21,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
-    QSplitter,
-    QTextBrowser,
-    QTextEdit,
     QHeaderView,
     QTableWidget,
     QTableWidgetItem,
@@ -57,8 +54,6 @@ FILE_FILTER = (
     "Images (*.png *.jpg *.jpeg *.tiff *.tif *.bmp);;"
     "LaTeX (*.tex);;Markdown (*.md);;All files (*)"
 )
-
-SHOW_PREVIEW_PANEL = False
 
 STATUS_ICON_SUCCESS = "✅"
 STATUS_ICON_WARNING = "🟨"
@@ -203,20 +198,6 @@ def _severity_label(severity: str) -> str:
     if severity == "warning":
         return "Warning"
     return "OK"
-
-
-def _build_results_text(payload: dict) -> str:
-    summary = payload.get("summary", "").strip()
-    if summary:
-        return summary
-
-    lines = []
-    for row in payload.get("rows", []):
-        icon = _severity_icon(row.get("severity", "success"))
-        source = row.get("source", "")
-        target = row.get("target", "")
-        lines.append(f"{icon}  {source}  ->  {target}")
-    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -464,10 +445,7 @@ class MainWindow(QMainWindow):
         output_dir_row.addWidget(self.open_folder_btn)
         layout.addLayout(output_dir_row)
 
-        # --- Results + Preview splitter ---
-        results_panel = QWidget()
-        results_panel_layout = QVBoxLayout(results_panel)
-
+        # --- Results table ---
         self.results_table = QTableWidget(0, 3)
         self.results_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
         self.results_table.verticalHeader().setVisible(False)
@@ -478,6 +456,7 @@ class MainWindow(QMainWindow):
         self.results_table.setWordWrap(False)
         self.results_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         self.results_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.results_table.setMinimumHeight(120)
         header = self.results_table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -485,27 +464,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.results_table.setColumnWidth(0, 110)
         self.results_table.setColumnWidth(2, 220)
-        results_panel_layout.addWidget(self.results_table)
-
-        self.results_text = QTextBrowser()
-        self.results_text.setReadOnly(True)
-        self.results_text.setOpenExternalLinks(True)
-        self.results_text.setPlaceholderText("Conversion results will appear here.")
-        results_panel_layout.addWidget(self.results_text)
-
-        self.preview_text = QTextEdit()
-        self.preview_text.setReadOnly(True)
-        self.preview_text.setPlaceholderText("Preview of converted content.")
-
-        if SHOW_PREVIEW_PANEL:
-            splitter = QSplitter(Qt.Orientation.Vertical)
-            splitter.addWidget(results_panel)
-            splitter.addWidget(self.preview_text)
-            splitter.setSizes([250, 300])
-            layout.addWidget(splitter, stretch=1)
-        else:
-            self.preview_text.setVisible(False)
-            layout.addWidget(results_panel, stretch=1)
+        layout.addWidget(self.results_table, stretch=1)
 
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
         self.input_text.textChanged.connect(self._on_sources_changed)
@@ -549,9 +508,6 @@ class MainWindow(QMainWindow):
             self._updating_filename = True
             self.filename_edit.setText(filename)
             self._updating_filename = False
-
-    def _set_results_text(self, text: str):
-        self.results_text.setPlainText(text)
 
     def _refresh_output_directory_display(self):
         output_dir_text = self.output_dir_edit.text().strip()
@@ -628,7 +584,6 @@ class MainWindow(QMainWindow):
 
         output_dir = _resolve_auto_output_directory(sources)
         self.output_dir_edit.setText(str(output_dir))
-        self._set_results_text(f"Output directory auto-selected: {output_dir}")
 
     @Slot(str)
     def _on_output_dir_changed(self, _text: str):
@@ -681,9 +636,7 @@ class MainWindow(QMainWindow):
             errors.append("No valid input files resolved.")
 
         if errors:
-            self._set_results_text(
-                "Validation errors:\n\n" + "\n".join(f"  - {e}" for e in errors)
-            )
+            self.status_label.setText("Validation errors: " + "; ".join(errors))
             self._populate_results_table([])
             return
 
@@ -691,9 +644,7 @@ class MainWindow(QMainWindow):
         fmt_info = FORMAT_OPTIONS[format_label]
         self.convert_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
-        self.results_text.clear()
         self._populate_results_table([])
-        self.preview_text.clear()
         self.open_folder_btn.setVisible(False)
         self.status_label.setStyleSheet("")
 
@@ -734,15 +685,6 @@ class MainWindow(QMainWindow):
             self._last_output_dir = None
 
         self._populate_results_table(rows)
-        self._set_results_text(_build_results_text(payload))
-
-        fmt_key = FORMAT_OPTIONS[self.format_combo.currentText()]["key"]
-        if fmt_key == "html":
-            self.preview_text.setHtml(preview[:50000])
-        elif fmt_key == "markdown":
-            self.preview_text.setMarkdown(preview[:50000])
-        else:
-            self.preview_text.setPlainText(preview[:50000])
 
     @Slot()
     def _on_worker_finished(self):

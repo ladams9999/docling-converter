@@ -49,7 +49,6 @@ uv run pytest -q
   - existing non-empty output directory is never auto-overwritten
 - `MainWindow._on_finished`
   - done-state UI changes
-  - preview text update behavior for HTML/Markdown/plain-text paths
   - results table population (`Status`, `Source`, `Target`)
   - `Open output directory` button visibility when output directory exists
 - `MainWindow._on_worker_finished`
@@ -72,7 +71,6 @@ The following are intentionally outside this unit test scope and should be verif
 - Native dialog UX (`QFileDialog.getOpenFileNames`, `getExistingDirectory`)
 - Drag-and-drop event behavior in `FileDropTextEdit`
 - Full end-to-end threading timing/race behavior under heavy conversion loads
-- Visual rendering fidelity details of rich preview content across formats (preview pane is currently hidden by feature flag)
 - Full interactive GUI click-flow verification of filename auto/manual mode transitions
 
 ## Manual smoke checks for latest output-directory UX

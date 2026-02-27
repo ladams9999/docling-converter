@@ -169,10 +169,7 @@ def test_start_conversion_empty_input_and_output_shows_validation_errors(qapp):
     window.output_dir_edit.setText("")
     window._start_conversion()
 
-    text = window.results_text.toPlainText()
-    assert "No input files specified." in text
-    assert "No output directory specified." in text
-    assert "Output directory does not exist" in text
+    assert window.results_table.rowCount() == 0
     assert window._worker is None
     window.close()
 
@@ -186,8 +183,7 @@ def test_start_conversion_invalid_output_directory_shows_error(qapp, tmp_path):
     window.output_dir_edit.setText(str(tmp_path / "not_there"))
     window._start_conversion()
 
-    text = window.results_text.toPlainText()
-    assert "Output directory does not exist" in text
+    assert window.results_table.rowCount() == 0
     assert window._worker is None
     window.close()
 
@@ -198,8 +194,7 @@ def test_start_conversion_invalid_input_paths_show_resolve_errors(qapp, tmp_path
     window.output_dir_edit.setText(str(tmp_path))
     window._start_conversion()
 
-    text = window.results_text.toPlainText()
-    assert "File not found" in text
+    assert window.results_table.rowCount() == 0
     assert window._worker is None
     window.close()
 
@@ -218,8 +213,6 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     window.output_dir_edit.setText(str(tmp_path))
     window.format_combo.setCurrentText("Markdown (.md)")
     window.filename_edit.setText(" custom.md ")
-    window.results_text.setPlainText("old")
-    window.preview_text.setPlainText("old")
 
     window._start_conversion()
 
@@ -234,8 +227,6 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     assert window._worker is worker
     assert window.convert_btn.isEnabled() is False
     assert window.progress_bar.isHidden() is False
-    assert window.results_text.toPlainText() == ""
-    assert window.preview_text.toPlainText() == ""
 
     assert window._on_progress in worker.progress.callbacks
     assert window._on_finished in worker.result_ready.callbacks
@@ -337,7 +328,7 @@ def test_blank_manual_edit_reenables_auto_filename(qapp, tmp_path):
     window.close()
 
 
-def test_on_finished_sets_done_state_and_plain_preview_for_json_doctags(qapp):
+def test_on_finished_sets_done_state_and_table_for_json_doctags(qapp):
     window = main.MainWindow()
     window.convert_btn.setEnabled(False)
     window.progress_bar.setVisible(True)
@@ -361,12 +352,10 @@ def test_on_finished_sets_done_state_and_plain_preview_for_json_doctags(qapp):
     assert window.status_label.text() == "Done."
     assert window.convert_btn.isEnabled() is True
     assert window.progress_bar.isVisible() is False
-    assert window.results_text.toPlainText() == "✅  C:/docs/a.pdf  ->  a.json"
     assert window.results_table.rowCount() == 1
     assert "OK" in window.results_table.item(0, 0).text()
     assert window.results_table.item(0, 1).text() == "C:/docs/a.pdf"
     assert window.results_table.item(0, 2).text() == "a.json"
-    assert window.preview_text.toPlainText() == "json preview"
 
     window.convert_btn.setEnabled(False)
     window.progress_bar.setVisible(True)
@@ -375,7 +364,6 @@ def test_on_finished_sets_done_state_and_plain_preview_for_json_doctags(qapp):
     assert window.status_label.text() == "Done."
     assert window.convert_btn.isEnabled() is True
     assert window.progress_bar.isVisible() is False
-    assert window.preview_text.toPlainText() == "tags preview"
     window.close()
 
 
@@ -397,12 +385,11 @@ def test_on_finished_uses_markdown_and_html_branches(qapp):
 
     window.format_combo.setCurrentText("Markdown (.md)")
     window._on_finished(payload, "# title")
-    assert window.results_text.toPlainText() == "✅  C:/docs/a.pdf  ->  a.md"
+    assert window.results_table.rowCount() == 1
 
     window.format_combo.setCurrentText("HTML (.html)")
     window._on_finished(payload, "<h1>Title</h1>")
-    assert window.results_text.toPlainText() == "✅  C:/docs/a.pdf  ->  a.md"
-    assert "Title" in window.preview_text.toPlainText()
+    assert window.results_table.rowCount() == 1
     window.close()
 
 
@@ -426,21 +413,10 @@ def test_on_finished_includes_output_directory_link_when_directory_exists(qapp, 
 
     window._on_finished(payload, "preview")
 
-    assert "✅  sample" in window.results_text.toPlainText()
     assert window.open_folder_btn.isHidden() is False
     assert window.open_folder_btn.text() == "Open output directory"
     assert window.output_dir_display_label.text() == f"Output directory: {tmp_path}"
     window.close()
-
-
-def test_preview_panel_hidden_by_flag(qapp):
-    window = main.MainWindow()
-
-    assert main.SHOW_PREVIEW_PANEL is False
-    assert window.preview_text.isVisible() is False
-    window.close()
-
-
 def test_on_worker_finished_clears_worker_reference(qapp):
     window = main.MainWindow()
     window._worker = _MockConversionWorker([], Path.cwd(), {}, "")

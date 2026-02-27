@@ -34,7 +34,7 @@ The GUI window provides:
 4. **Output filename** (optional) — leave blank to auto-generate from the input filename. Duplicate names get a numeric suffix (`report_1.md`, etc.).
 5. **Convert** — click to start. Conversion runs in a background thread; progress is shown in the status area.
 6. **Output directory display** — shown as a dedicated row below the status area, with an **Open output directory** button beside it.
-7. **Results panel** — includes a table with **Status**, **Source**, and **Target** columns plus a text summary below it.
+7. **Results panel** — includes a table with **Status**, **Source**, and **Target** columns.
 
 ## Supported Formats
 
@@ -85,6 +85,5 @@ docling/
 - When output directory is empty and input files/URLs are added, the app auto-selects an output directory.
 - For local files/directories, it prefers the first resolved source directory when writable.
 - For URL-only inputs or non-writable local directories, it falls back to your Downloads folder (or home directory if Downloads cannot be created).
-- Conversion results now include a column view (`Status`, `Source`, `Target`) and a text summary.
+- Conversion results now include a column view (`Status`, `Source`, `Target`).
 - Output directory is shown in a dedicated display row with an **Open output directory** button.
-- Preview pane is currently hidden behind a temporary feature flag.
