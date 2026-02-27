@@ -99,7 +99,7 @@ class ConversionWorker(QThread):
                 elif key == "json":
                     content = doc.model_dump_json(indent=2)
                 elif key == "doctags":
-                    content = doc.export_to_document_tokens()
+                    content = doc.export_to_doctags()
                 else:
                     content = doc.export_to_markdown()
 
@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         fmt_group = QGroupBox("Export format")
         fmt_inner = QVBoxLayout(fmt_group)
         self.format_combo = QComboBox()
-        self.format_combo.addItems(FORMAT_OPTIONS.keys())
+        self.format_combo.addItems(list(FORMAT_OPTIONS.keys()))
         fmt_inner.addWidget(self.format_combo)
         options_layout.addWidget(fmt_group)
 
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.status_label)
 
         # --- Results + Preview splitter ---
-        splitter = QSplitter(Qt.Vertical)
+        splitter = QSplitter(Qt.Orientation.Vertical)
 
         self.results_text = QPlainTextEdit()
         self.results_text.setReadOnly(True)
@@ -363,8 +363,8 @@ class MainWindow(QMainWindow):
             errors.append("No output directory specified.")
 
         output_dir = Path(output_dir_str) if output_dir_str else None
-        if output_dir and not output_dir.is_dir():
-            errors.append(f"Output directory does not exist: {output_dir}")
+        if not output_dir or not output_dir.is_dir():
+            errors.append(f"Output directory does not exist: {output_dir_str}")
 
         sources, resolve_errors = _resolve_sources(raw) if raw else ([], [])
         errors.extend(resolve_errors)
@@ -385,6 +385,7 @@ class MainWindow(QMainWindow):
         self.results_text.clear()
         self.preview_text.clear()
 
+        assert output_dir is not None  # guaranteed by validation above
         self._worker = ConversionWorker(
             sources, output_dir, fmt_info, custom_filename
         )
