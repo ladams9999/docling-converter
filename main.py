@@ -60,7 +60,7 @@ class ConversionWorker(QThread):
     """Runs docling conversion off the main thread."""
 
     progress = Signal(str)  # status message per file
-    finished = Signal(str, str)  # (results_summary, first_preview_content)
+    result_ready = Signal(str, str)  # (results_summary, first_preview_content)
 
     def __init__(
         self,
@@ -124,7 +124,7 @@ class ConversionWorker(QThread):
             f"Output directory: {self.output_dir}\n\n"
             + "\n".join(results)
         )
-        self.finished.emit(summary, first_preview)
+        self.result_ready.emit(summary, first_preview)
 
 
 # ---------------------------------------------------------------------------
@@ -389,7 +389,8 @@ class MainWindow(QMainWindow):
             sources, output_dir, fmt_info, custom_filename
         )
         self._worker.progress.connect(self._on_progress)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.result_ready.connect(self._on_finished)
+        self._worker.finished.connect(self._on_worker_finished)
         self._worker.start()
 
     @Slot(str)
@@ -411,7 +412,14 @@ class MainWindow(QMainWindow):
         else:
             self.preview_text.setPlainText(preview[:50000])
 
+    @Slot()
+    def _on_worker_finished(self):
         self._worker = None
+
+    def closeEvent(self, event):
+        if self._worker and self._worker.isRunning():
+            self._worker.wait(5000)
+        super().closeEvent(event)
 
 
 # ---------------------------------------------------------------------------
