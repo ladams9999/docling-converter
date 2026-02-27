@@ -40,10 +40,20 @@ FORMAT_OPTIONS = {
 }
 
 SUPPORTED_EXTENSIONS = {
-    ".pdf", ".docx", ".pptx", ".xlsx",
-    ".html", ".htm",
-    ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp",
-    ".tex", ".md",
+    ".pdf",
+    ".docx",
+    ".pptx",
+    ".xlsx",
+    ".html",
+    ".htm",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tiff",
+    ".tif",
+    ".bmp",
+    ".tex",
+    ".md",
 }
 
 FILE_FILTER = (
@@ -94,9 +104,7 @@ class ConversionWorker(QThread):
 
         for i, src in enumerate(self.sources, 1):
             src_label = str(src.resolve()) if isinstance(src, Path) else src
-            self.progress.emit(
-                f"Converting {i}/{len(self.sources)}: {src_label}..."
-            )
+            self.progress.emit(f"Converting {i}/{len(self.sources)}: {src_label}...")
             target_name = ""
             severity = "success"
             row_messages: list[str] = []
@@ -139,7 +147,9 @@ class ConversionWorker(QThread):
 
                 if result_errors:
                     row_messages.extend(str(item) for item in result_errors)
-                    if any(token in result_status for token in ("fail", "fatal", "error")):
+                    if any(
+                        token in result_status for token in ("fail", "fatal", "error")
+                    ):
                         severity = "error"
                         raise RuntimeError(
                             "; ".join(str(item) for item in result_errors)
@@ -244,7 +254,8 @@ def _resolve_sources(raw_text: str) -> tuple[list, list[str]]:
                 sources.append(p)
             elif p.is_dir():
                 children = [
-                    c for c in sorted(p.iterdir())
+                    c
+                    for c in sorted(p.iterdir())
                     if c.suffix.lower() in SUPPORTED_EXTENSIONS
                 ]
                 if children:
@@ -359,7 +370,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
 
         # --- Input files ---
-        input_group = QGroupBox("Input file(s) — paste paths/URLs or drag && drop files")
+        input_group = QGroupBox(
+            "Input file(s) — paste paths/URLs or drag && drop files"
+        )
         input_layout = QVBoxLayout(input_group)
 
         self.input_text = FileDropTextEdit()
@@ -457,12 +470,18 @@ class MainWindow(QMainWindow):
         self.results_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.results_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.results_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.results_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.results_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
         self.results_table.setAlternatingRowColors(True)
         self.results_table.setWordWrap(False)
         self.results_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
-        self.results_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.results_table.setHorizontalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
         self.results_table.setMinimumHeight(120)
         header = self.results_table.horizontalHeader()
         header.setStretchLastSection(False)
@@ -490,9 +509,13 @@ class MainWindow(QMainWindow):
             if sources:
                 return f"{_get_source_stem(sources[0])}{ext}"
 
-            first_line = next((line.strip() for line in raw.splitlines() if line.strip()), "")
+            first_line = next(
+                (line.strip() for line in raw.splitlines() if line.strip()), ""
+            )
             if first_line:
-                if first_line.startswith("http://") or first_line.startswith("https://"):
+                if first_line.startswith("http://") or first_line.startswith(
+                    "https://"
+                ):
                     stem = _get_source_stem(first_line)
                 else:
                     stem = Path(first_line).stem or "document"
@@ -519,7 +542,9 @@ class MainWindow(QMainWindow):
     def _refresh_output_directory_display(self):
         output_dir_text = self.output_dir_edit.text().strip()
         if output_dir_text:
-            self.output_dir_display_label.setText(f"Output directory: {output_dir_text}")
+            self.output_dir_display_label.setText(
+                f"Output directory: {output_dir_text}"
+            )
         else:
             self.output_dir_display_label.setText("Output directory: (not set)")
 
@@ -558,9 +583,7 @@ class MainWindow(QMainWindow):
         if files:
             current = self.input_text.toPlainText().rstrip()
             separator = "\n" if current else ""
-            self.input_text.setPlainText(
-                current + separator + "\n".join(files)
-            )
+            self.input_text.setPlainText(current + separator + "\n".join(files))
 
     @Slot()
     def _clear_input_files(self):
@@ -568,9 +591,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _browse_output_dir(self):
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select output directory"
-        )
+        directory = QFileDialog.getExistingDirectory(self, "Select output directory")
         if directory:
             self.output_dir_edit.setText(directory)
 
@@ -661,9 +682,7 @@ class MainWindow(QMainWindow):
         self.status_label.setStyleSheet("")
 
         assert output_dir is not None  # guaranteed by validation above
-        self._worker = ConversionWorker(
-            sources, output_dir, fmt_info, custom_filename
-        )
+        self._worker = ConversionWorker(sources, output_dir, fmt_info, custom_filename)
         self._worker.progress.connect(self._on_progress)
         self._worker.result_ready.connect(self._on_finished)
         self._worker.finished.connect(self._on_worker_finished)

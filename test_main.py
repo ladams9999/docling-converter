@@ -103,7 +103,9 @@ def test_resolve_auto_output_directory_uses_first_local_parent_when_writable(tmp
     assert result == tmp_path
 
 
-def test_resolve_auto_output_directory_falls_back_to_downloads_for_url(monkeypatch, tmp_path):
+def test_resolve_auto_output_directory_falls_back_to_downloads_for_url(
+    monkeypatch, tmp_path
+):
     downloads = tmp_path / "Downloads"
     downloads.mkdir()
     monkeypatch.setattr(main, "_get_downloads_directory", lambda: downloads)
@@ -393,7 +395,9 @@ def test_on_finished_uses_markdown_and_html_branches(qapp):
     window.close()
 
 
-def test_on_finished_includes_output_directory_link_when_directory_exists(qapp, tmp_path):
+def test_on_finished_includes_output_directory_link_when_directory_exists(
+    qapp, tmp_path
+):
     window = main.MainWindow()
     window.output_dir_edit.setText(str(tmp_path))
 
@@ -417,6 +421,8 @@ def test_on_finished_includes_output_directory_link_when_directory_exists(qapp, 
     assert window.open_folder_btn.text() == "Open output directory"
     assert window.output_dir_display_label.text() == f"Output directory: {tmp_path}"
     window.close()
+
+
 def test_on_worker_finished_clears_worker_reference(qapp):
     window = main.MainWindow()
     window._worker = _MockConversionWorker([], Path.cwd(), {}, "")
