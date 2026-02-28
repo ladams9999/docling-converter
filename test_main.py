@@ -1,4 +1,7 @@
 import os
+import sys
+import types
+import json
 from pathlib import Path
 
 import pytest
@@ -129,6 +132,122 @@ def test_resolve_auto_output_directory_falls_back_when_not_writable(
     result = main._resolve_auto_output_directory([input_file])
 
     assert result == downloads
+
+
+def test_should_chunk_pdf_by_page_count():
+    should_chunk, reason = main._should_chunk_pdf(31, 1.0)
+    assert should_chunk is True
+    assert "page count" in reason
+
+
+def test_should_chunk_pdf_by_size_mb():
+    should_chunk, reason = main._should_chunk_pdf(10, 5.1)
+    assert should_chunk is True
+    assert "size" in reason
+
+
+def test_should_not_chunk_small_pdf():
+    should_chunk, reason = main._should_chunk_pdf(10, 4.0)
+    assert should_chunk is False
+    assert reason == ""
+
+
+def test_combine_chunk_contents_html_wraps_sections():
+    html_one = "<html><body><h1>A</h1></body></html>"
+    html_two = "<html><body><p>B</p></body></html>"
+
+    merged = main._combine_chunk_contents("html", [html_one, html_two])
+
+    assert merged.startswith("<!DOCTYPE html><html><body>")
+    assert "<section><h1>A</h1></section>" in merged
+    assert "<section><p>B</p></section>" in merged
+
+
+def test_combine_chunk_contents_json_merges_nested_lists():
+    chunk_one = json.dumps({"pages": [1], "meta": {"title": "Doc"}})
+    chunk_two = json.dumps({"pages": [2], "meta": {"author": "A"}})
+
+    merged = json.loads(main._combine_chunk_contents("json", [chunk_one, chunk_two]))
+
+    assert merged["pages"] == [1, 2]
+    assert merged["meta"]["title"] == "Doc"
+    assert merged["meta"]["author"] == "A"
+
+
+def test_worker_chunks_large_pdf_and_recombines_markdown(monkeypatch, tmp_path):
+    source_pdf = tmp_path / "big.pdf"
+    source_pdf.write_bytes(b"%PDF-1.4")
+
+    chunk_dir = tmp_path / "chunks"
+    chunk_dir.mkdir()
+    chunk_one = chunk_dir / "chunk_1.pdf"
+    chunk_two = chunk_dir / "chunk_2.pdf"
+    chunk_one.write_bytes(b"%PDF-1.4")
+    chunk_two.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(main, "_get_pdf_page_count", lambda _path: 45)
+    monkeypatch.setattr(main, "_get_file_size_mb", lambda _path: 1.0)
+    monkeypatch.setattr(
+        main,
+        "_split_pdf_into_chunks",
+        lambda _path, _size: ([chunk_one, chunk_two], chunk_dir),
+    )
+
+    docling_module = types.ModuleType("docling")
+    converter_module = types.ModuleType("docling.document_converter")
+
+    class _FakeDocument:
+        def __init__(self, source: str):
+            self.source = source
+
+        def export_to_markdown(self):
+            return f"md-{Path(self.source).stem}"
+
+        def export_to_html(self):
+            return "<html><body>x</body></html>"
+
+        def model_dump_json(self, indent=2):
+            return json.dumps({"source": self.source}, indent=indent)
+
+        def export_to_doctags(self):
+            return f"tags-{self.source}"
+
+    class _FakeResult:
+        def __init__(self, source: str):
+            self.document = _FakeDocument(source)
+            self.status = "success"
+            self.errors = []
+
+    class _FakeConverter:
+        calls = []
+
+        def convert(self, source: str):
+            self.__class__.calls.append(source)
+            return _FakeResult(source)
+
+    converter_module.DocumentConverter = _FakeConverter
+    monkeypatch.setitem(sys.modules, "docling", docling_module)
+    monkeypatch.setitem(sys.modules, "docling.document_converter", converter_module)
+
+    worker = main.ConversionWorker(
+        [source_pdf],
+        tmp_path,
+        main.FORMAT_OPTIONS["Markdown (.md)"],
+        "",
+    )
+
+    captured = {}
+    worker.result_ready.connect(
+        lambda payload, preview: captured.update({"payload": payload, "preview": preview})
+    )
+    worker.run()
+
+    output_file = tmp_path / "big.md"
+    assert output_file.exists()
+    assert output_file.read_text(encoding="utf-8") == "md-chunk_1\n\nmd-chunk_2"
+    assert len(_FakeConverter.calls) == 2
+    assert captured["preview"] == "md-chunk_1\n\nmd-chunk_2"
+    assert captured["payload"]["rows"][0]["severity"] in {"success", "warning"}
 
 
 class _FakeSignal:
