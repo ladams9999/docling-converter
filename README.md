@@ -1,40 +1,44 @@
-# docling-converter
+# Docling Converter
 
-Desktop document converter powered by [Docling](https://github.com/docling-project/docling) and [PySide6](https://doc.qt.io/qtforpython-6/). Convert PDFs, Word docs, PowerPoints, spreadsheets, HTML, images, and more into Markdown, HTML, JSON, or DocTags.
+Docling Converter is a PySide6 desktop application for converting supported
+documents with [Docling](https://github.com/docling-project/docling). It accepts
+local file paths, directories, and HTTP/HTTPS URLs, then exports results to
+Markdown, HTML, JSON, or DocTags.
 
 ## Prerequisites
 
-- **Python 3.12+**
-- **[uv](https://docs.astral.sh/uv/)** package manager
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
 
 ## Setup
 
+Run these commands from the `docling-converter` repository root.
+
 ```bash
-# Clone the repository
 git clone <repo-url>
 cd docling-converter
-
-# Install dependencies (creates .venv automatically)
 uv sync
 ```
 
-## Usage
-
-Launch the application:
+## Run the Application
 
 ```bash
 uv run python main.py
 ```
 
-The GUI window provides:
+## How to Use It
 
-1. **Input file(s)** — paste file paths or URLs (one per line), drag and drop files from Explorer, or click **Browse files** to use the native file picker. Pasting a directory path will find all supported files in it.
-2. **Output directory** — paste a path or click **Browse** to select. If left empty, adding input sources auto-selects output: first local source directory if writable; otherwise your Downloads directory.
-3. **Export format** — choose from Markdown, HTML, JSON, or DocTags.
-4. **Output filename** (optional) — leave blank to auto-generate from the input filename. Duplicate names get a numeric suffix (`report_1.md`, etc.).
-5. **Convert** — click to start. Conversion runs in a background thread; progress is shown in the status area.
-6. **Output directory display** — shown as a dedicated row below the status area, with an **Open output directory** button beside it.
-7. **Results panel** — includes a table with **Status**, **Source**, and **Target** columns.
+1. Add one or more sources by pasting paths or URLs, dragging files into the
+   input area, or using **Browse files...**.
+2. Choose an output directory, or leave it empty and let the app auto-select
+   one from the first writable local source directory or your Downloads folder.
+3. Pick an export format.
+4. Accept the auto-generated filename or enter your own.
+5. Click **Convert**.
+
+The results table shows per-source status, source, and target output. When a
+conversion finishes with a valid output directory, **Open output directory**
+opens it in the native file explorer.
 
 ## Supported Formats
 
@@ -53,37 +57,34 @@ The GUI window provides:
 
 ### Output
 
-| Format | Extension | Description |
-|--------|-----------|-------------|
-| Markdown | `.md` | Clean markdown representation |
-| HTML | `.html` | HTML export |
-| JSON | `.json` | Lossless DoclingDocument JSON |
-| DocTags | `.doctags` | Docling document token format |
-
-## Project Structure
-
-```
-docling/
-  main.py           # PySide6 application (entry point)
-  pyproject.toml    # Project config and dependencies
-  README.md         # This file
-  AGENTS.md         # Instructions for AI agents
-  .gitignore        # Git ignore rules
-  .python-version   # Python version pin (3.12)
-```
+| Format | Extension |
+|--------|-----------|
+| Markdown | `.md` |
+| HTML | `.html` |
+| JSON | `.json` |
+| DocTags | `.doctags` |
 
 ## Notes
 
-- Docling downloads AI model weights from Hugging Face on first conversion. This may take a few minutes and requires internet access.
-- This project includes `hf-xet` to improve Hugging Face model download performance when Xet-backed storage is available.
-- If Xet is unavailable, downloads automatically fall back to regular HTTP.
-- PDF conversion is computationally intensive. GPU acceleration is used when available.
-- The first import of docling is slow (~10–30s) due to loading PyTorch/Transformers. Subsequent conversions are faster.
+- Docling may download model data on first use, which can take time and
+  requires internet access.
+- Large PDFs are chunked before conversion when they exceed the configured page
+  count or size thresholds.
+- Conversion runs in a background thread so the GUI remains responsive.
 
-## Recent UX behavior changes
+## Testing
 
-- When output directory is empty and input files/URLs are added, the app auto-selects an output directory.
-- For local files/directories, it prefers the first resolved source directory when writable.
-- For URL-only inputs or non-writable local directories, it falls back to your Downloads folder (or home directory if Downloads cannot be created).
-- Conversion results now include a column view (`Status`, `Source`, `Target`).
-- Output directory is shown in a dedicated display row with an **Open output directory** button.
+Run the automated test suite with:
+
+```bash
+uv run pytest -q
+```
+
+See `TEST.md` for the detailed testing guide.
+
+## Documentation
+
+- `AGENTS.md` for contributor and agent guidance
+- `IMPLEMENTATION.md` for architecture details
+- `PROJECT_PLAN.md` for current project direction
+- `PENDING_TASKS.md` and `COMPLETED_TASKS.md` for project tracking

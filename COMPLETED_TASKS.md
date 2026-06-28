@@ -1,0 +1,17 @@
+# Completed Tasks for Docling Converter
+
+- Built a PySide6 desktop GUI for Docling-based document conversion.
+- Added support for local files, directories of supported files, and HTTP/HTTPS
+  document URLs as input sources.
+- Added export support for Markdown, HTML, JSON, and DocTags output formats.
+- Added automatic output filename generation with manual override and restore via
+  the **Auto** button.
+- Added automatic output-directory selection that prefers the first writable
+  local source directory and falls back to the user's Downloads folder.
+- Added an output-directory display row and an **Open output directory** action.
+- Added a conversion results table with per-row status, source, target, and
+  message tooltips.
+- Added PDF chunking for large PDFs and recombination logic for Markdown, HTML,
+  JSON, and DocTags outputs.
+- Added unit coverage in `test_main.py` and a dedicated testing guide in
+  `TEST.md`.
