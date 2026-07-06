@@ -4,8 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Replace the single-screen window shell with tabs for **Settings**,
-  **Workspace**, **Pending**, and **Converted**.
 - Build the **Workspace** tab controls for source assignment, target directory
   selection, and workspace load/save actions.
 - Build the **Pending** tab list and add/remove actions for files, directories,

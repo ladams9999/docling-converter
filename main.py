@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QHeaderView,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -135,7 +136,39 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        root_layout = QVBoxLayout(central)
+        self.tabs = QTabWidget()
+        root_layout.addWidget(self.tabs)
+
+        self.settings_tab = QWidget()
+        self.workspace_tab = QWidget()
+        self.pending_tab = QWidget()
+        self.converted_tab = QWidget()
+
+        self.tabs.addTab(self.settings_tab, "Settings")
+        self.tabs.addTab(self.workspace_tab, "Workspace")
+        self.tabs.addTab(self.pending_tab, "Pending")
+        self.tabs.addTab(self.converted_tab, "Converted")
+
+        self.settings_layout = QVBoxLayout(self.settings_tab)
+        self.settings_layout.addWidget(
+            QLabel("Workspace settings and conversion options will appear here.")
+        )
+        self.settings_layout.addStretch(1)
+
+        self.pending_layout = QVBoxLayout(self.pending_tab)
+        self.pending_layout.addWidget(
+            QLabel("Pending queue management will be built in the next slices.")
+        )
+        self.pending_layout.addStretch(1)
+
+        self.converted_layout = QVBoxLayout(self.converted_tab)
+        self.converted_layout.addWidget(
+            QLabel("Converted-item history will be built in the next slices.")
+        )
+        self.converted_layout.addStretch(1)
+
+        layout = QVBoxLayout(self.workspace_tab)
 
         # --- Input files ---
         input_group = QGroupBox(

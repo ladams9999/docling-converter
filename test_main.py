@@ -370,6 +370,15 @@ def test_output_filename_defaults_from_first_input_and_selected_format(qapp, tmp
     window.close()
 
 
+def test_main_window_builds_required_tabs(qapp):
+    window = main.MainWindow()
+
+    labels = [window.tabs.tabText(index) for index in range(window.tabs.count())]
+
+    assert labels == ["Settings", "Workspace", "Pending", "Converted"]
+    window.close()
+
+
 def test_on_sources_changed_autofills_empty_output_dir_and_sets_link(qapp, tmp_path):
     input_file = tmp_path / "sample.pdf"
     input_file.write_text("x", encoding="utf-8")

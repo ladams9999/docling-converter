@@ -22,3 +22,5 @@
   workspace, workspace file, and output directory.
 - Extracted conversion orchestration and helper logic from `main.py` into a
   dedicated module while preserving the existing test seams.
+- Replaced the single-screen shell with top-level **Settings**,
+  **Workspace**, **Pending**, and **Converted** tabs as the new app frame.
