@@ -32,3 +32,5 @@
   visible from the Workspace, Pending, and Converted surfaces.
 - Built the **Converted** tab history view and wired successful conversion
   results into persisted workspace state.
+- Reconnected conversion start/completion to the workspace-backed pending queue,
+  including queue draining for completed items.

@@ -200,6 +200,10 @@ class MainWindow(QMainWindow):
         self.pending_layout.addWidget(self.pending_list, stretch=1)
 
         pending_actions_layout = QHBoxLayout()
+        self.pending_convert_btn = QPushButton("Convert pending")
+        self.pending_convert_btn.clicked.connect(self._start_conversion)
+        pending_actions_layout.addWidget(self.pending_convert_btn)
+
         self.pending_remove_btn = QPushButton("Remove selected")
         self.pending_remove_btn.clicked.connect(self._remove_selected_pending_sources)
         pending_actions_layout.addWidget(self.pending_remove_btn)
@@ -762,7 +766,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _start_conversion(self):
-        raw = self.input_text.toPlainText().strip()
+        raw = "\n".join(self._workspace.pending_sources).strip()
         output_dir_str = self.output_dir_edit.text().strip()
         format_label = self.format_combo.currentText()
         custom_filename = self.filename_edit.text().strip()
@@ -795,6 +799,7 @@ class MainWindow(QMainWindow):
         # Start worker
         fmt_info = FORMAT_OPTIONS[format_label]
         self.convert_btn.setEnabled(False)
+        self.pending_convert_btn.setEnabled(False)
         self.clear_input_btn.setEnabled(False)
         self._set_status_message("Starting conversion...", busy=True)
         self._populate_results_table([])
@@ -814,6 +819,7 @@ class MainWindow(QMainWindow):
     @Slot(object, str)
     def _on_finished(self, payload: dict, preview: str):
         self.convert_btn.setEnabled(True)
+        self.pending_convert_btn.setEnabled(True)
         self.clear_input_btn.setEnabled(True)
 
         rows = payload.get("rows", [])
@@ -845,6 +851,14 @@ class MainWindow(QMainWindow):
         if converted_rows:
             self._workspace.converted_items.extend(converted_rows)
             self._refresh_converted_table()
+
+            completed_sources = {item.source for item in converted_rows}
+            remaining_sources = [
+                source
+                for source in self._workspace.pending_sources
+                if source not in completed_sources
+            ]
+            self._set_pending_sources(remaining_sources)
 
     @Slot()
     def _on_worker_finished(self):

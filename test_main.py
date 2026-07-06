@@ -495,6 +495,8 @@ def test_set_status_message_updates_shared_progress_views(qapp):
 
 def test_on_finished_updates_converted_history(qapp):
     window = main.MainWindow()
+    window._workspace.pending_sources = ["C:/docs/a.pdf"]
+    window._refresh_pending_list()
 
     payload = {
         "rows": [
@@ -514,6 +516,7 @@ def test_on_finished_updates_converted_history(qapp):
 
     assert len(window._workspace.converted_items) == 1
     assert window._workspace.converted_items[0].target == "a.md"
+    assert window._workspace.pending_sources == []
     assert window.converted_table.rowCount() == 1
     assert window.converted_table.item(0, 1).text() == "C:/docs/a.pdf"
     window.close()
