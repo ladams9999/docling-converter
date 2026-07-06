@@ -24,3 +24,5 @@
   dedicated module while preserving the existing test seams.
 - Replaced the single-screen shell with top-level **Settings**,
   **Workspace**, **Pending**, and **Converted** tabs as the new app frame.
+- Added workspace-file state, save/load actions, and synchronized Workspace-tab
+  controls for sources, target directory, and saved UI settings.

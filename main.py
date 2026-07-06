@@ -48,6 +48,9 @@ from conversion_logic import (
     _should_chunk_pdf,
     _split_pdf_into_chunks,
 )
+from workspace_model import WorkspaceData, WorkspaceSettings
+from workspace_paths import get_default_workspace_file
+from workspace_persistence import load_workspace, save_workspace
 
 
 def _sync_conversion_logic_bindings():
@@ -130,8 +133,12 @@ class MainWindow(QMainWindow):
         self._auto_filename_enabled = True
         self._last_auto_filename = ""
         self._updating_filename = False
+        self._applying_workspace = False
         self._last_output_dir: Path | None = None
+        self._workspace_path = get_default_workspace_file()
+        self._workspace = WorkspaceData()
         self._build_ui()
+        self._sync_workspace_from_ui()
 
     def _build_ui(self):
         central = QWidget()
@@ -169,6 +176,20 @@ class MainWindow(QMainWindow):
         self.converted_layout.addStretch(1)
 
         layout = QVBoxLayout(self.workspace_tab)
+
+        workspace_actions_group = QGroupBox("Workspace file")
+        workspace_actions_layout = QHBoxLayout(workspace_actions_group)
+        self.workspace_path_label = QLabel("")
+        workspace_actions_layout.addWidget(self.workspace_path_label, stretch=1)
+
+        self.load_workspace_btn = QPushButton("Load workspace...")
+        self.load_workspace_btn.clicked.connect(self._load_workspace_from_dialog)
+        workspace_actions_layout.addWidget(self.load_workspace_btn)
+
+        self.save_workspace_btn = QPushButton("Save workspace...")
+        self.save_workspace_btn.clicked.connect(self._save_workspace_from_dialog)
+        workspace_actions_layout.addWidget(self.save_workspace_btn)
+        layout.addWidget(workspace_actions_group)
 
         # --- Input files ---
         input_group = QGroupBox(
@@ -299,6 +320,77 @@ class MainWindow(QMainWindow):
         self.filename_edit.textEdited.connect(self._on_filename_edited)
         self._apply_auto_filename()
         self._refresh_output_directory_display()
+        self._refresh_workspace_path_display()
+
+    def _refresh_workspace_path_display(self):
+        self.workspace_path_label.setText(f"Workspace file: {self._workspace_path}")
+
+    def _current_workspace_settings(self) -> WorkspaceSettings:
+        return WorkspaceSettings(
+            format_label=self.format_combo.currentText(),
+            custom_filename=self.filename_edit.text().strip(),
+            auto_filename_enabled=self._auto_filename_enabled,
+        )
+
+    def _resolved_workspace_sources(self) -> list[str]:
+        raw = self.input_text.toPlainText().strip()
+        if not raw:
+            return []
+
+        sources, _ = _resolve_sources(raw)
+        if sources:
+            return [
+                str(source.resolve()) if isinstance(source, Path) else source
+                for source in sources
+            ]
+
+        return [line.strip() for line in raw.splitlines() if line.strip()]
+
+    def _sync_workspace_from_ui(self):
+        if self._applying_workspace:
+            return
+        self._workspace.target_dir = self.output_dir_edit.text().strip()
+        self._workspace.pending_sources = self._resolved_workspace_sources()
+        self._workspace.settings = self._current_workspace_settings()
+
+    def _apply_workspace_to_ui(self, workspace: WorkspaceData):
+        self._applying_workspace = True
+        try:
+            self._workspace = workspace
+
+            self.output_dir_edit.setText(workspace.target_dir)
+            self.input_text.setPlainText("\n".join(workspace.pending_sources))
+
+            self.format_combo.setCurrentText(workspace.settings.format_label)
+            self._auto_filename_enabled = workspace.settings.auto_filename_enabled
+
+            if workspace.settings.auto_filename_enabled:
+                self._apply_auto_filename()
+            else:
+                self._updating_filename = True
+                self.filename_edit.setText(workspace.settings.custom_filename)
+                self._updating_filename = False
+
+            self._refresh_output_directory_display()
+        finally:
+            self._applying_workspace = False
+        self._sync_workspace_from_ui()
+
+    def _save_workspace_to_path(self, path: Path):
+        self._sync_workspace_from_ui()
+        save_workspace(self._workspace, path)
+        self._workspace_path = path
+        self._refresh_workspace_path_display()
+        self.status_label.setStyleSheet("color: palette(text);")
+        self.status_label.setText(f"Saved workspace: {path}")
+
+    def _load_workspace_to_path(self, path: Path):
+        workspace = load_workspace(path)
+        self._workspace_path = path
+        self._refresh_workspace_path_display()
+        self._apply_workspace_to_ui(workspace)
+        self.status_label.setStyleSheet("color: palette(text);")
+        self.status_label.setText(f"Loaded workspace: {path}")
 
     def _get_default_output_filename(self) -> str:
         format_label = self.format_combo.currentText()
@@ -391,6 +483,30 @@ class MainWindow(QMainWindow):
         self.input_text.setPlainText("")
 
     @Slot()
+    def _load_workspace_from_dialog(self):
+        default_dir = str(self._workspace_path.parent)
+        selected_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load workspace",
+            default_dir,
+            "Workspace files (*.json);;All files (*)",
+        )
+        if selected_path:
+            self._load_workspace_to_path(Path(selected_path))
+
+    @Slot()
+    def _save_workspace_from_dialog(self):
+        default_path = str(self._workspace_path)
+        selected_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save workspace",
+            default_path,
+            "Workspace files (*.json);;All files (*)",
+        )
+        if selected_path:
+            self._save_workspace_to_path(Path(selected_path))
+
+    @Slot()
     def _browse_output_dir(self):
         directory = QFileDialog.getExistingDirectory(self, "Select output directory")
         if directory:
@@ -399,10 +515,12 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_format_changed(self, _text: str):
         self._update_auto_filename()
+        self._sync_workspace_from_ui()
 
     @Slot()
     def _on_sources_changed(self):
         self._update_auto_filename()
+        self._sync_workspace_from_ui()
 
         if self.output_dir_edit.text().strip():
             return
@@ -421,6 +539,7 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_output_dir_changed(self, _text: str):
         self._refresh_output_directory_display()
+        self._sync_workspace_from_ui()
 
     @Slot(str)
     def _on_filename_edited(self, text: str):
@@ -430,14 +549,17 @@ class MainWindow(QMainWindow):
         if not text.strip():
             self._auto_filename_enabled = True
             self._apply_auto_filename()
+            self._sync_workspace_from_ui()
             return
 
         self._auto_filename_enabled = False
+        self._sync_workspace_from_ui()
 
     @Slot()
     def _on_auto_filename_clicked(self):
         self._auto_filename_enabled = True
         self._apply_auto_filename()
+        self._sync_workspace_from_ui()
 
     @Slot()
     def _open_output_folder(self):

@@ -10,6 +10,8 @@ from PySide6.QtWidgets import QApplication
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import main
+from workspace_model import WorkspaceData, WorkspaceSettings
+from workspace_persistence import save_workspace
 
 
 @pytest.fixture(scope="session")
@@ -376,6 +378,56 @@ def test_main_window_builds_required_tabs(qapp):
     labels = [window.tabs.tabText(index) for index in range(window.tabs.count())]
 
     assert labels == ["Settings", "Workspace", "Pending", "Converted"]
+    window.close()
+
+
+def test_save_workspace_to_path_persists_current_ui_state(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+    workspace_path = tmp_path / "saved" / "workspace.json"
+
+    window = main.MainWindow()
+    window.input_text.setPlainText(str(input_file))
+    window.output_dir_edit.setText(str(tmp_path))
+    window.format_combo.setCurrentText("JSON (.json)")
+    window.filename_edit.setText("bundle.json")
+    window._on_filename_edited("bundle.json")
+
+    window._save_workspace_to_path(workspace_path)
+
+    restored = main.load_workspace(workspace_path)
+    assert restored.target_dir == str(tmp_path)
+    assert restored.pending_sources == [str(input_file.resolve())]
+    assert restored.settings.format_label == "JSON (.json)"
+    assert restored.settings.custom_filename == "bundle.json"
+    assert restored.settings.auto_filename_enabled is False
+    window.close()
+
+
+def test_load_workspace_to_path_applies_workspace_state(qapp, tmp_path):
+    workspace = WorkspaceData(
+        target_dir=str(tmp_path),
+        pending_sources=[str(tmp_path / "sample.pdf"), "https://example.com/doc"],
+        settings=WorkspaceSettings(
+            format_label="HTML (.html)",
+            custom_filename="custom.html",
+            auto_filename_enabled=False,
+        ),
+    )
+    workspace_path = tmp_path / "workspace.json"
+    save_workspace(workspace, workspace_path)
+
+    window = main.MainWindow()
+    window._load_workspace_to_path(workspace_path)
+
+    assert window.output_dir_edit.text() == str(tmp_path)
+    assert (
+        window.input_text.toPlainText()
+        == f"{tmp_path / 'sample.pdf'}\nhttps://example.com/doc"
+    )
+    assert window.format_combo.currentText() == "HTML (.html)"
+    assert window.filename_edit.text() == "custom.html"
+    assert window.workspace_path_label.text() == f"Workspace file: {workspace_path}"
     window.close()
 
 
