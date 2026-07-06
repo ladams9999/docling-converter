@@ -30,3 +30,5 @@
   directories, and single URLs, synchronized with workspace state.
 - Added shared processing status and progress views so conversion state is
   visible from the Workspace, Pending, and Converted surfaces.
+- Built the **Converted** tab history view and wired successful conversion
+  results into persisted workspace state.

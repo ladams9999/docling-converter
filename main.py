@@ -49,7 +49,7 @@ from conversion_logic import (
     _should_chunk_pdf,
     _split_pdf_into_chunks,
 )
-from workspace_model import WorkspaceData, WorkspaceSettings
+from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
 from workspace_paths import get_default_workspace_file
 from workspace_persistence import load_workspace, save_workspace
 
@@ -221,10 +221,31 @@ class MainWindow(QMainWindow):
         converted_progress_layout.addWidget(self.converted_progress_bar)
         self.converted_layout.addWidget(converted_progress_group)
 
-        self.converted_layout.addWidget(
-            QLabel("Converted-item history will be built in the next slices.")
+        self.converted_table = QTableWidget(0, 3)
+        self.converted_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
+        self.converted_table.verticalHeader().setVisible(False)
+        self.converted_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.converted_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
         )
-        self.converted_layout.addStretch(1)
+        self.converted_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.converted_table.setAlternatingRowColors(True)
+        self.converted_table.setWordWrap(False)
+        self.converted_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.converted_table.setHorizontalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
+        self.converted_table.setMinimumHeight(160)
+        converted_header = self.converted_table.horizontalHeader()
+        converted_header.setStretchLastSection(False)
+        converted_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        converted_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        converted_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.converted_table.setColumnWidth(0, 110)
+        self.converted_table.setColumnWidth(2, 220)
+        self.converted_layout.addWidget(self.converted_table, stretch=1)
 
         layout = QVBoxLayout(self.workspace_tab)
 
@@ -423,10 +444,37 @@ class MainWindow(QMainWindow):
         self._workspace.pending_sources = self._resolved_workspace_sources()
         self._workspace.settings = self._current_workspace_settings()
         self._refresh_pending_list()
+        self._refresh_converted_table()
 
     def _refresh_pending_list(self):
         self.pending_list.clear()
         self.pending_list.addItems(self._workspace.pending_sources)
+
+    def _refresh_converted_table(self):
+        rows = [item.to_dict() for item in self._workspace.converted_items]
+        self.converted_table.setRowCount(0)
+
+        for row_data in rows:
+            row_idx = self.converted_table.rowCount()
+            self.converted_table.insertRow(row_idx)
+
+            severity = row_data.get("severity", "success")
+            icon = _severity_icon(severity)
+            label = _severity_label(severity)
+            status_item = QTableWidgetItem(f"{icon} {label}")
+            source_item = QTableWidgetItem(row_data.get("source", ""))
+            target_item = QTableWidgetItem(row_data.get("target", ""))
+
+            messages = row_data.get("messages", [])
+            if messages:
+                tooltip = "\n".join(messages)
+                status_item.setToolTip(tooltip)
+                source_item.setToolTip(tooltip)
+                target_item.setToolTip(tooltip)
+
+            self.converted_table.setItem(row_idx, 0, status_item)
+            self.converted_table.setItem(row_idx, 1, source_item)
+            self.converted_table.setItem(row_idx, 2, target_item)
 
     def _set_pending_sources(self, sources: list[str]):
         self._applying_workspace = True
@@ -784,6 +832,19 @@ class MainWindow(QMainWindow):
             self._last_output_dir = None
 
         self._populate_results_table(rows)
+        converted_rows = [
+            ConvertedItem(
+                source=row.get("source", ""),
+                target=row.get("target", ""),
+                severity=row.get("severity", "success"),
+                messages=list(row.get("messages", [])),
+            )
+            for row in rows
+            if row.get("target")
+        ]
+        if converted_rows:
+            self._workspace.converted_items.extend(converted_rows)
+            self._refresh_converted_table()
 
     @Slot()
     def _on_worker_finished(self):

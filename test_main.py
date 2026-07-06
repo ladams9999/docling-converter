@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import main
-from workspace_model import WorkspaceData, WorkspaceSettings
+from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
 from workspace_persistence import save_workspace
 
 
@@ -408,6 +408,14 @@ def test_load_workspace_to_path_applies_workspace_state(qapp, tmp_path):
     workspace = WorkspaceData(
         target_dir=str(tmp_path),
         pending_sources=[str(tmp_path / "sample.pdf"), "https://example.com/doc"],
+        converted_items=[
+            ConvertedItem(
+                source=str(tmp_path / "sample.pdf"),
+                target="sample.md",
+                severity="success",
+                messages=[],
+            )
+        ],
         settings=WorkspaceSettings(
             format_label="HTML (.html)",
             custom_filename="custom.html",
@@ -428,6 +436,8 @@ def test_load_workspace_to_path_applies_workspace_state(qapp, tmp_path):
     assert window.format_combo.currentText() == "HTML (.html)"
     assert window.filename_edit.text() == "custom.html"
     assert window.workspace_path_label.text() == f"Workspace file: {workspace_path}"
+    assert window.converted_table.rowCount() == 1
+    assert window.converted_table.item(0, 2).text() == "sample.md"
     window.close()
 
 
@@ -480,6 +490,32 @@ def test_set_status_message_updates_shared_progress_views(qapp):
     assert window.progress_bar.isHidden() is False
     assert window.pending_progress_bar.isHidden() is False
     assert window.converted_progress_bar.isHidden() is False
+    window.close()
+
+
+def test_on_finished_updates_converted_history(qapp):
+    window = main.MainWindow()
+
+    payload = {
+        "rows": [
+            {
+                "severity": "success",
+                "source": "C:/docs/a.pdf",
+                "target": "a.md",
+                "messages": [],
+            }
+        ],
+        "summary": "done",
+        "has_errors": False,
+        "output_dir": "",
+    }
+
+    window._on_finished(payload, "# preview")
+
+    assert len(window._workspace.converted_items) == 1
+    assert window._workspace.converted_items[0].target == "a.md"
+    assert window.converted_table.rowCount() == 1
+    assert window.converted_table.item(0, 1).text() == "C:/docs/a.pdf"
     window.close()
 
 
