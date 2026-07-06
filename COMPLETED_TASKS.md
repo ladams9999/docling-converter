@@ -17,3 +17,4 @@
   `TEST.md`.
 - Added a serializable workspace data model for target directory, pending
   sources, converted items, and workspace settings.
+- Added versioned workspace save/load support with a clean JSON round-trip.

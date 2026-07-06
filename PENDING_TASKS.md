@@ -4,8 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Add save/load support for a single workspace file format and verify a clean
-  round-trip through disk.
 - Add helpers for the default home-based workspace location and workspace file
   paths.
 - Extract workspace state/persistence and conversion orchestration out of the
