@@ -1,9 +1,10 @@
 # Docling Converter
 
 Docling Converter is a PySide6 desktop application for converting supported
-documents with [Docling](https://github.com/docling-project/docling). It accepts
-local file paths, directories, and HTTP/HTTPS URLs, then exports results to
-Markdown, HTML, JSON, or DocTags.
+documents with [Docling](https://github.com/docling-project/docling). It now uses
+a workspace-oriented flow with top-level **Settings**, **Workspace**,
+**Pending**, and **Converted** tabs. It accepts local file paths, directories,
+and HTTP/HTTPS URLs, then exports results to Markdown, HTML, JSON, or DocTags.
 
 ## Prerequisites
 
@@ -29,16 +30,23 @@ uv run python main.py
 ## How to Use It
 
 1. Add one or more sources by pasting paths or URLs, dragging files into the
-   input area, or using **Browse files...**.
-2. Choose an output directory, or leave it empty and let the app auto-select
-   one from the first writable local source directory or your Downloads folder.
-3. Pick an export format.
-4. Accept the auto-generated filename or enter your own.
-5. Click **Convert**.
+   Workspace tab input area, or use **Browse files...**.
+2. Choose an output directory on the **Workspace** tab, or leave it empty and
+   let the app auto-select one from the first writable local source directory
+   or your Downloads folder.
+3. Save or load a workspace file from the **Workspace** tab when needed.
+4. Review and adjust the queued items on the **Pending** tab. You can add files,
+   add a directory, add a single URL, remove selected items, or clear the queue.
+5. Use the **Settings** tab controls to choose an export format and output
+   filename behavior.
+6. Start conversion from **Convert** on the Workspace tab or **Convert pending**
+   on the Pending tab.
+7. Review completed items on the **Converted** tab.
 
-The results table shows per-source status, source, and target output. When a
-conversion finishes with a valid output directory, **Open output directory**
-opens it in the native file explorer.
+The workspace queue drives conversion. When a queued item converts
+successfully, it moves into the converted history and is removed from the
+pending list. When a conversion finishes with a valid output directory,
+**Open output directory** opens it in the native file explorer.
 
 ## Supported Formats
 
@@ -66,6 +74,8 @@ opens it in the native file explorer.
 
 ## Notes
 
+- The default workspace file lives under
+  `~/.docling-converter/default-workspace/workspace.json`.
 - Docling may download model data on first use, which can take time and
   requires internet access.
 - Large PDFs are chunked before conversion when they exceed the configured page
@@ -77,7 +87,7 @@ opens it in the native file explorer.
 Run the automated test suite with:
 
 ```bash
-uv run pytest -q
+uv run python -m pytest -q
 ```
 
 See `TEST.md` for the detailed testing guide.

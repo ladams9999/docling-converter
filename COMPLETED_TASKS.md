@@ -37,3 +37,5 @@
 - Expanded automated coverage for workspace state, persistence, tab
   construction, queue behavior, shared progress, converted history, and
   queue-based conversion orchestration.
+- Refreshed `README.md`, `IMPLEMENTATION.md`, and `TEST.md` for the
+  workspace-oriented tabbed workflow and current test surface.

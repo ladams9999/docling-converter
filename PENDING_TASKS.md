@@ -4,9 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Refresh `IMPLEMENTATION.md`, `README.md`, and `TEST.md` after the redesign
-  lands.
-
 - Extract `main.py` into focused modules once the current single-file structure
   becomes too costly to maintain.
 - Expand coverage beyond the current unit tests for drag-and-drop behavior,
