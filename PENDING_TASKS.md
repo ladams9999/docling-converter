@@ -4,8 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Extract workspace state/persistence and conversion orchestration out of the
-  current monolithic `main.py` UI flow.
 - Replace the single-screen window shell with tabs for **Settings**,
   **Workspace**, **Pending**, and **Converted**.
 - Build the **Workspace** tab controls for source assignment, target directory
