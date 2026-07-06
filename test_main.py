@@ -357,6 +357,28 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     window.close()
 
 
+def test_pending_convert_button_starts_worker_from_workspace_queue(
+    qapp, monkeypatch, tmp_path
+):
+    _MockConversionWorker.instances.clear()
+    monkeypatch.setattr(main, "ConversionWorker", _MockConversionWorker)
+
+    input_file = tmp_path / "queued.pdf"
+    input_file.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    window._append_pending_sources([str(input_file)])
+    window.output_dir_edit.setText(str(tmp_path))
+
+    window.pending_convert_btn.click()
+
+    assert len(_MockConversionWorker.instances) == 1
+    worker = _MockConversionWorker.instances[0]
+    assert worker.sources == [input_file]
+    assert window.pending_convert_btn.isEnabled() is False
+    window.close()
+
+
 def test_output_filename_defaults_from_first_input_and_selected_format(qapp, tmp_path):
     input_file = tmp_path / "sample.pdf"
     input_file.write_text("x", encoding="utf-8")

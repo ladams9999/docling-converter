@@ -4,8 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Expand tests around workspace state, persistence, tab construction, queue
-  behavior, and migrated conversion orchestration.
 - Refresh `IMPLEMENTATION.md`, `README.md`, and `TEST.md` after the redesign
   lands.
 

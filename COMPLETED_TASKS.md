@@ -34,3 +34,6 @@
   results into persisted workspace state.
 - Reconnected conversion start/completion to the workspace-backed pending queue,
   including queue draining for completed items.
+- Expanded automated coverage for workspace state, persistence, tab
+  construction, queue behavior, shared progress, converted history, and
+  queue-based conversion orchestration.
