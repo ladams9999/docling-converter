@@ -165,6 +165,16 @@ class MainWindow(QMainWindow):
         self.settings_layout.addStretch(1)
 
         self.pending_layout = QVBoxLayout(self.pending_tab)
+        pending_progress_group = QGroupBox("Processing")
+        pending_progress_layout = QVBoxLayout(pending_progress_group)
+        self.pending_status_label = QLabel("")
+        pending_progress_layout.addWidget(self.pending_status_label)
+        self.pending_progress_bar = QProgressBar()
+        self.pending_progress_bar.setRange(0, 0)
+        self.pending_progress_bar.setVisible(False)
+        pending_progress_layout.addWidget(self.pending_progress_bar)
+        self.pending_layout.addWidget(pending_progress_group)
+
         pending_controls_layout = QHBoxLayout()
 
         self.pending_add_files_btn = QPushButton("Add files...")
@@ -201,6 +211,16 @@ class MainWindow(QMainWindow):
         self.pending_layout.addLayout(pending_actions_layout)
 
         self.converted_layout = QVBoxLayout(self.converted_tab)
+        converted_progress_group = QGroupBox("Processing")
+        converted_progress_layout = QVBoxLayout(converted_progress_group)
+        self.converted_status_label = QLabel("")
+        converted_progress_layout.addWidget(self.converted_status_label)
+        self.converted_progress_bar = QProgressBar()
+        self.converted_progress_bar.setRange(0, 0)
+        self.converted_progress_bar.setVisible(False)
+        converted_progress_layout.addWidget(self.converted_progress_bar)
+        self.converted_layout.addWidget(converted_progress_group)
+
         self.converted_layout.addWidget(
             QLabel("Converted-item history will be built in the next slices.")
         )
@@ -356,6 +376,25 @@ class MainWindow(QMainWindow):
     def _refresh_workspace_path_display(self):
         self.workspace_path_label.setText(f"Workspace file: {self._workspace_path}")
 
+    def _set_status_message(
+        self,
+        message: str,
+        *,
+        busy: bool = False,
+        style: str = "color: palette(text);",
+    ):
+        self.status_label.setStyleSheet(style)
+        self.status_label.setText(message)
+        self.progress_bar.setVisible(busy)
+
+        for label, bar in (
+            (self.pending_status_label, self.pending_progress_bar),
+            (self.converted_status_label, self.converted_progress_bar),
+        ):
+            label.setStyleSheet(style)
+            label.setText(message)
+            bar.setVisible(busy)
+
     def _current_workspace_settings(self) -> WorkspaceSettings:
         return WorkspaceSettings(
             format_label=self.format_combo.currentText(),
@@ -406,8 +445,10 @@ class MainWindow(QMainWindow):
             for source in sources
         ]
         if errors:
-            self.status_label.setStyleSheet("color: red;")
-            self.status_label.setText("Pending-source errors: " + "; ".join(errors))
+            self._set_status_message(
+                "Pending-source errors: " + "; ".join(errors),
+                style="color: red;",
+            )
         if not normalized_sources:
             return
 
@@ -416,8 +457,7 @@ class MainWindow(QMainWindow):
             if source not in merged_sources:
                 merged_sources.append(source)
         self._set_pending_sources(merged_sources)
-        self.status_label.setStyleSheet("color: palette(text);")
-        self.status_label.setText(f"Queued {len(normalized_sources)} source(s).")
+        self._set_status_message(f"Queued {len(normalized_sources)} source(s).")
 
     def _apply_workspace_to_ui(self, workspace: WorkspaceData):
         self._applying_workspace = True
@@ -447,16 +487,14 @@ class MainWindow(QMainWindow):
         save_workspace(self._workspace, path)
         self._workspace_path = path
         self._refresh_workspace_path_display()
-        self.status_label.setStyleSheet("color: palette(text);")
-        self.status_label.setText(f"Saved workspace: {path}")
+        self._set_status_message(f"Saved workspace: {path}")
 
     def _load_workspace_to_path(self, path: Path):
         workspace = load_workspace(path)
         self._workspace_path = path
         self._refresh_workspace_path_display()
         self._apply_workspace_to_ui(workspace)
-        self.status_label.setStyleSheet("color: palette(text);")
-        self.status_label.setText(f"Loaded workspace: {path}")
+        self._set_status_message(f"Loaded workspace: {path}")
 
     def _get_default_output_filename(self) -> str:
         format_label = self.format_combo.currentText()
@@ -699,7 +737,10 @@ class MainWindow(QMainWindow):
             errors.append("No valid input files resolved.")
 
         if errors:
-            self.status_label.setText("Validation errors: " + "; ".join(errors))
+            self._set_status_message(
+                "Validation errors: " + "; ".join(errors),
+                style="color: red;",
+            )
             self._populate_results_table([])
             return
 
@@ -707,10 +748,9 @@ class MainWindow(QMainWindow):
         fmt_info = FORMAT_OPTIONS[format_label]
         self.convert_btn.setEnabled(False)
         self.clear_input_btn.setEnabled(False)
-        self.progress_bar.setVisible(True)
+        self._set_status_message("Starting conversion...", busy=True)
         self._populate_results_table([])
         self.open_folder_btn.setVisible(False)
-        self.status_label.setStyleSheet("")
 
         assert output_dir is not None  # guaranteed by validation above
         self._worker = ConversionWorker(sources, output_dir, fmt_info, custom_filename)
@@ -721,23 +761,19 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_progress(self, message: str):
-        self.status_label.setStyleSheet("color: palette(text);")
-        self.status_label.setText(message)
+        self._set_status_message(message, busy=True)
 
     @Slot(object, str)
     def _on_finished(self, payload: dict, preview: str):
-        self.progress_bar.setVisible(False)
         self.convert_btn.setEnabled(True)
         self.clear_input_btn.setEnabled(True)
 
         rows = payload.get("rows", [])
         has_errors = any(row.get("severity") == "error" for row in rows)
         if has_errors:
-            self.status_label.setStyleSheet("color: red;")
-            self.status_label.setText("Done with errors.")
+            self._set_status_message("Done with errors.", style="color: red;")
         else:
-            self.status_label.setStyleSheet("color: green;")
-            self.status_label.setText("Done.")
+            self._set_status_message("Done.", style="color: green;")
 
         output_dir_text = payload.get("output_dir", "")
         output_dir = Path(output_dir_text) if output_dir_text else None

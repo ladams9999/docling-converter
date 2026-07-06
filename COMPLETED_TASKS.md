@@ -28,3 +28,5 @@
   controls for sources, target directory, and saved UI settings.
 - Built the **Pending** tab queue with add/remove actions for files,
   directories, and single URLs, synchronized with workspace state.
+- Added shared processing status and progress views so conversion state is
+  visible from the Workspace, Pending, and Converted surfaces.

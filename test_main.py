@@ -469,6 +469,20 @@ def test_remove_selected_pending_sources_updates_workspace_and_input(qapp, tmp_p
     window.close()
 
 
+def test_set_status_message_updates_shared_progress_views(qapp):
+    window = main.MainWindow()
+
+    window._set_status_message("Working...", busy=True, style="color: blue;")
+
+    assert window.status_label.text() == "Working..."
+    assert window.pending_status_label.text() == "Working..."
+    assert window.converted_status_label.text() == "Working..."
+    assert window.progress_bar.isHidden() is False
+    assert window.pending_progress_bar.isHidden() is False
+    assert window.converted_progress_bar.isHidden() is False
+    window.close()
+
+
 def test_on_sources_changed_autofills_empty_output_dir_and_sets_link(qapp, tmp_path):
     input_file = tmp_path / "sample.pdf"
     input_file.write_text("x", encoding="utf-8")

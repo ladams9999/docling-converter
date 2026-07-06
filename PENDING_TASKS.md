@@ -4,8 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Add shared conversion-progress state that can be surfaced consistently across
-  tabs.
 - Build the **Converted** tab list for completed items and wire completion state
   into it.
 - Reconnect the current worker/export flow so queued items convert correctly in
