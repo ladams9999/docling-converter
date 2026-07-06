@@ -15,3 +15,5 @@
   JSON, and DocTags outputs.
 - Added unit coverage in `test_main.py` and a dedicated testing guide in
   `TEST.md`.
+- Added a serializable workspace data model for target directory, pending
+  sources, converted items, and workspace settings.
