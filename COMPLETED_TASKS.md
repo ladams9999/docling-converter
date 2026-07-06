@@ -18,3 +18,5 @@
 - Added a serializable workspace data model for target directory, pending
   sources, converted items, and workspace settings.
 - Added versioned workspace save/load support with a clean JSON round-trip.
+- Added default home-based workspace path helpers for the app root, default
+  workspace, workspace file, and output directory.
