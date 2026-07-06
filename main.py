@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMainWindow,
     QPlainTextEdit,
     QProgressBar,
@@ -164,10 +165,40 @@ class MainWindow(QMainWindow):
         self.settings_layout.addStretch(1)
 
         self.pending_layout = QVBoxLayout(self.pending_tab)
-        self.pending_layout.addWidget(
-            QLabel("Pending queue management will be built in the next slices.")
+        pending_controls_layout = QHBoxLayout()
+
+        self.pending_add_files_btn = QPushButton("Add files...")
+        self.pending_add_files_btn.clicked.connect(self._add_pending_files_from_dialog)
+        pending_controls_layout.addWidget(self.pending_add_files_btn)
+
+        self.pending_add_directory_btn = QPushButton("Add directory...")
+        self.pending_add_directory_btn.clicked.connect(
+            self._add_pending_directory_from_dialog
         )
-        self.pending_layout.addStretch(1)
+        pending_controls_layout.addWidget(self.pending_add_directory_btn)
+
+        self.pending_url_edit = QLineEdit()
+        self.pending_url_edit.setPlaceholderText("https://example.com/page")
+        pending_controls_layout.addWidget(self.pending_url_edit, stretch=1)
+
+        self.pending_add_url_btn = QPushButton("Add URL")
+        self.pending_add_url_btn.clicked.connect(self._add_pending_url)
+        pending_controls_layout.addWidget(self.pending_add_url_btn)
+        self.pending_layout.addLayout(pending_controls_layout)
+
+        self.pending_list = QListWidget()
+        self.pending_layout.addWidget(self.pending_list, stretch=1)
+
+        pending_actions_layout = QHBoxLayout()
+        self.pending_remove_btn = QPushButton("Remove selected")
+        self.pending_remove_btn.clicked.connect(self._remove_selected_pending_sources)
+        pending_actions_layout.addWidget(self.pending_remove_btn)
+
+        self.pending_clear_btn = QPushButton("Clear pending")
+        self.pending_clear_btn.clicked.connect(self._clear_pending_sources)
+        pending_actions_layout.addWidget(self.pending_clear_btn)
+        pending_actions_layout.addStretch(1)
+        self.pending_layout.addLayout(pending_actions_layout)
 
         self.converted_layout = QVBoxLayout(self.converted_tab)
         self.converted_layout.addWidget(
@@ -352,6 +383,41 @@ class MainWindow(QMainWindow):
         self._workspace.target_dir = self.output_dir_edit.text().strip()
         self._workspace.pending_sources = self._resolved_workspace_sources()
         self._workspace.settings = self._current_workspace_settings()
+        self._refresh_pending_list()
+
+    def _refresh_pending_list(self):
+        self.pending_list.clear()
+        self.pending_list.addItems(self._workspace.pending_sources)
+
+    def _set_pending_sources(self, sources: list[str]):
+        self._applying_workspace = True
+        try:
+            self._workspace.pending_sources = list(sources)
+            self.input_text.setPlainText("\n".join(self._workspace.pending_sources))
+        finally:
+            self._applying_workspace = False
+        self._sync_workspace_from_ui()
+
+    def _append_pending_sources(self, entries: list[str]):
+        raw = "\n".join(entries)
+        sources, errors = _resolve_sources(raw)
+        normalized_sources = [
+            str(source.resolve()) if isinstance(source, Path) else source
+            for source in sources
+        ]
+        if errors:
+            self.status_label.setStyleSheet("color: red;")
+            self.status_label.setText("Pending-source errors: " + "; ".join(errors))
+        if not normalized_sources:
+            return
+
+        merged_sources = list(self._workspace.pending_sources)
+        for source in normalized_sources:
+            if source not in merged_sources:
+                merged_sources.append(source)
+        self._set_pending_sources(merged_sources)
+        self.status_label.setStyleSheet("color: palette(text);")
+        self.status_label.setText(f"Queued {len(normalized_sources)} source(s).")
 
     def _apply_workspace_to_ui(self, workspace: WorkspaceData):
         self._applying_workspace = True
@@ -481,6 +547,48 @@ class MainWindow(QMainWindow):
     @Slot()
     def _clear_input_files(self):
         self.input_text.setPlainText("")
+
+    @Slot()
+    def _add_pending_files_from_dialog(self):
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Select pending file(s)", "", FILE_FILTER
+        )
+        if files:
+            self._append_pending_sources(files)
+
+    @Slot()
+    def _add_pending_directory_from_dialog(self):
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select directory to expand into pending files"
+        )
+        if directory:
+            self._append_pending_sources([directory])
+
+    @Slot()
+    def _add_pending_url(self):
+        url = self.pending_url_edit.text().strip()
+        if not url:
+            return
+        self.pending_url_edit.setText("")
+        self._append_pending_sources([url])
+
+    @Slot()
+    def _remove_selected_pending_sources(self):
+        selected_indexes = self.pending_list.selectedIndexes()
+        if not selected_indexes:
+            return
+
+        selected_rows = {index.row() for index in selected_indexes}
+        remaining_sources = [
+            source
+            for index, source in enumerate(self._workspace.pending_sources)
+            if index not in selected_rows
+        ]
+        self._set_pending_sources(remaining_sources)
+
+    @Slot()
+    def _clear_pending_sources(self):
+        self._set_pending_sources([])
 
     @Slot()
     def _load_workspace_from_dialog(self):

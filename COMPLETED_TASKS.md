@@ -26,3 +26,5 @@
   **Workspace**, **Pending**, and **Converted** tabs as the new app frame.
 - Added workspace-file state, save/load actions, and synchronized Workspace-tab
   controls for sources, target directory, and saved UI settings.
+- Built the **Pending** tab queue with add/remove actions for files,
+  directories, and single URLs, synchronized with workspace state.

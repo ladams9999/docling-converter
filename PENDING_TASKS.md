@@ -4,8 +4,6 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Build the **Pending** tab list and add/remove actions for files, directories,
-  and single URLs.
 - Add shared conversion-progress state that can be surfaced consistently across
   tabs.
 - Build the **Converted** tab list for completed items and wire completion state

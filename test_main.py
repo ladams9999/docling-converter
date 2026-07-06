@@ -431,6 +431,44 @@ def test_load_workspace_to_path_applies_workspace_state(qapp, tmp_path):
     window.close()
 
 
+def test_append_pending_sources_expands_directory_and_updates_queue(qapp, tmp_path):
+    folder = tmp_path / "inputs"
+    folder.mkdir()
+    supported = folder / "a.pdf"
+    supported.write_text("x", encoding="utf-8")
+    (folder / "note.txt").write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    window._append_pending_sources([str(folder), "https://example.com/doc"])
+
+    assert window._workspace.pending_sources == [
+        str(supported.resolve()),
+        "https://example.com/doc",
+    ]
+    assert window.pending_list.count() == 2
+    assert window.input_text.toPlainText() == (
+        f"{supported.resolve()}\nhttps://example.com/doc"
+    )
+    window.close()
+
+
+def test_remove_selected_pending_sources_updates_workspace_and_input(qapp, tmp_path):
+    first = tmp_path / "a.pdf"
+    second = tmp_path / "b.pdf"
+    first.write_text("x", encoding="utf-8")
+    second.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    window._append_pending_sources([str(first), str(second)])
+    window.pending_list.setCurrentRow(0)
+
+    window._remove_selected_pending_sources()
+
+    assert window._workspace.pending_sources == [str(second.resolve())]
+    assert window.input_text.toPlainText() == str(second.resolve())
+    window.close()
+
+
 def test_on_sources_changed_autofills_empty_output_dir_and_sets_link(qapp, tmp_path):
     input_file = tmp_path / "sample.pdf"
     input_file.write_text("x", encoding="utf-8")
