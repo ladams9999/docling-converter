@@ -26,6 +26,8 @@
   **Workspace**, **Pending**, and **Converted** tabs as the new app frame.
 - Added workspace-file state, save/load actions, and synchronized Workspace-tab
   controls for sources, target directory, and saved UI settings.
+- Added labeled workspace creation, a configurable base directory, per-input
+  export formats, and a derived Output files list.
 - Built the **Pending** tab queue with add/remove actions for files,
   directories, and single URLs, synchronized with workspace state.
 - Added shared processing status and progress views so conversion state is
@@ -39,3 +41,13 @@
   queue-based conversion orchestration.
 - Refreshed `README.md`, `IMPLEMENTATION.md`, and `TEST.md` for the
   workspace-oriented tabbed workflow and current test surface.
+- Added whole-wiki and sub-wiki discovery for public generic HTML sites with
+  canonical loop detection, root confirmation, `robots.txt` policy, progress,
+  cancellation, and persistent graph state.
+- Added cached HTML snapshots, optional asset downloads, original URL and UTC
+  fetch provenance, and version `1` workspace migration.
+- Added deterministic flattened wiki filenames, linked Markdown/HTML batch
+  conversion, successful-page link rewriting, and overwrite conflict
+  confirmation.
+- Added focused automated coverage for wiki URL rules, discovery, redirects,
+  cache integrity, assets, provenance, conversion, and queue integration.

@@ -67,12 +67,14 @@ class ConversionWorker(QThread):
         output_dir: Path,
         fmt_info: dict,
         custom_filename: str,
+        source_formats: dict[str, str] | None = None,
     ):
         super().__init__()
         self.sources = sources
         self.output_dir = output_dir
         self.fmt_info = fmt_info
         self.custom_filename = custom_filename
+        self.source_formats = source_formats or {}
 
     def run(self):
         from docling.document_converter import DocumentConverter
@@ -92,7 +94,13 @@ class ConversionWorker(QThread):
             temp_dirs: list[Path] = []
 
             try:
-                key = self.fmt_info["key"]
+                format_label = self.source_formats.get(src_label)
+                item_fmt_info = (
+                    FORMAT_OPTIONS[format_label]
+                    if format_label in FORMAT_OPTIONS
+                    else self.fmt_info
+                )
+                key = item_fmt_info["key"]
 
                 conversion_targets = [src]
                 chunked = False
@@ -161,7 +169,7 @@ class ConversionWorker(QThread):
                 if len(self.sources) == 1 and self.custom_filename:
                     fname = self.custom_filename
                 else:
-                    fname = f"{_get_source_stem(src)}{self.fmt_info['ext']}"
+                    fname = f"{_get_source_stem(src)}{item_fmt_info['ext']}"
 
                 out_path = _resolve_unique_path(self.output_dir, fname)
                 out_path.write_text(content, encoding="utf-8")

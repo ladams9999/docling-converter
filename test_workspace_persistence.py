@@ -54,3 +54,40 @@ def test_load_workspace_rejects_unknown_version(tmp_path):
 
     with pytest.raises(ValueError, match="Unsupported workspace file version: 999"):
         load_workspace(workspace_path)
+
+
+def test_load_workspace_migrates_version_one(tmp_path):
+    workspace_path = tmp_path / "workspace-v1.json"
+    workspace_path.write_text(
+        """
+{
+  "version": 1,
+  "workspace": {
+    "target_dir": "C:/docs/output",
+    "pending_sources": ["https://example.com/page"],
+    "converted_items": [],
+    "settings": {}
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    workspace = load_workspace(workspace_path)
+
+    assert workspace.target_dir == "C:/docs/output"
+    assert workspace.pending_sources == ["https://example.com/page"]
+    assert workspace.wiki_imports == []
+
+
+def test_load_workspace_migrates_version_two_with_new_defaults(tmp_path):
+    workspace_path = tmp_path / "workspace-v2.json"
+    workspace_path.write_text(
+        '{"version": 2, "workspace": {"pending_sources": ["a.pdf"]}}',
+        encoding="utf-8",
+    )
+
+    workspace = load_workspace(workspace_path)
+
+    assert workspace.label == "Default workspace"
+    assert workspace.source_formats == {}

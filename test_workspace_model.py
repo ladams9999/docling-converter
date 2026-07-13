@@ -1,4 +1,5 @@
 from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from wiki_model import WikiAsset, WikiImport, WikiPage
 
 
 def test_workspace_data_defaults_are_ui_safe():
@@ -12,8 +13,13 @@ def test_workspace_data_defaults_are_ui_safe():
 
 def test_workspace_data_round_trips_nested_state():
     workspace = WorkspaceData(
+        label="Research",
         target_dir=r"C:\docs\output",
         pending_sources=[r"C:\docs\a.pdf", "https://example.com/page"],
+        source_formats={
+            r"C:\docs\a.pdf": "HTML (.html)",
+            "https://example.com/page": "JSON (.json)",
+        },
         converted_items=[
             ConvertedItem(
                 source=r"C:\docs\a.pdf",
@@ -45,3 +51,45 @@ def test_converted_item_from_dict_normalizes_message_values():
     )
 
     assert item.messages == ["bad", "42"]
+
+
+def test_workspace_data_round_trips_wiki_graph():
+    page = WikiPage(
+        id="page-1",
+        import_id="wiki-1",
+        original_url="https://example.com/wiki/Page",
+        canonical_url="https://example.com/wiki/Page",
+        fetched_at="2026-07-12T18:00:00Z",
+        relative_path="Page",
+        output_filename="Page.md",
+        outgoing_urls=["https://example.com/wiki/Other"],
+        snapshot_key="pages/page-1.html",
+        content_hash="abc",
+    )
+    asset = WikiAsset(
+        original_url="https://example.com/image.png",
+        canonical_url="https://example.com/image.png",
+        fetched_at="2026-07-12T18:00:01Z",
+        snapshot_key="assets/image.png",
+        content_hash="def",
+        output_filename="image.png",
+    )
+    workspace = WorkspaceData(
+        pending_sources=[page.original_url],
+        wiki_imports=[
+            WikiImport(
+                id="wiki-1",
+                start_url=page.original_url,
+                root_url="https://example.com/wiki/",
+                scope="whole",
+                pages=[page],
+                assets=[asset],
+                discovered_at="2026-07-12T18:00:02Z",
+            )
+        ],
+    )
+
+    restored = WorkspaceData.from_dict(workspace.to_dict())
+
+    assert restored == workspace
+    assert restored.find_wiki_page(page.original_url) == page

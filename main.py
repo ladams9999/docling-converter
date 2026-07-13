@@ -10,12 +10,14 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QFileDialog,
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -25,6 +27,10 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
+)
+from app_settings import (
+    load_base_directory,
+    save_base_directory,
 )
 import conversion_logic as _conversion_logic
 from conversion_logic import (
@@ -52,6 +58,11 @@ from conversion_logic import (
 from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
 from workspace_paths import get_default_workspace_file
 from workspace_persistence import load_workspace, save_workspace
+from workspace_ui import NewWorkspaceDialog
+from wiki_conversion import WikiConversionWorker, planned_wiki_conflicts
+from wiki_discovery import WikiDiscoveryWorker
+from wiki_ui import WikiImportDialog
+from wiki_urls import canonicalize_url
 
 
 def _sync_conversion_logic_bindings():
@@ -131,11 +142,14 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Docling Document Converter")
         self.setMinimumSize(700, 600)
         self._worker = None
+        self._discovery_worker = None
+        self._close_pending = False
         self._auto_filename_enabled = True
         self._last_auto_filename = ""
         self._updating_filename = False
         self._applying_workspace = False
         self._last_output_dir: Path | None = None
+        self._base_directory = load_base_directory()
         self._workspace_path = get_default_workspace_file()
         self._workspace = WorkspaceData()
         self._build_ui()
@@ -159,9 +173,22 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.converted_tab, "Converted")
 
         self.settings_layout = QVBoxLayout(self.settings_tab)
-        self.settings_layout.addWidget(
-            QLabel("Workspace settings and conversion options will appear here.")
-        )
+        base_group = QGroupBox("Workspace base directory")
+        base_layout = QHBoxLayout(base_group)
+        self.base_dir_edit = QLineEdit(str(self._base_directory))
+        base_layout.addWidget(self.base_dir_edit)
+        self.base_dir_browse_btn = QPushButton("Browse...")
+        self.base_dir_browse_btn.clicked.connect(self._browse_base_directory)
+        base_layout.addWidget(self.base_dir_browse_btn)
+        self.settings_layout.addWidget(base_group)
+
+        default_format_group = QGroupBox("Default export format")
+        default_format_layout = QVBoxLayout(default_format_group)
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(list(FORMAT_OPTIONS.keys()))
+        self.format_combo.setCurrentText(self._workspace.settings.format_label)
+        default_format_layout.addWidget(self.format_combo)
+        self.settings_layout.addWidget(default_format_group)
         self.settings_layout.addStretch(1)
 
         self.pending_layout = QVBoxLayout(self.pending_tab)
@@ -194,6 +221,10 @@ class MainWindow(QMainWindow):
         self.pending_add_url_btn = QPushButton("Add URL")
         self.pending_add_url_btn.clicked.connect(self._add_pending_url)
         pending_controls_layout.addWidget(self.pending_add_url_btn)
+
+        self.pending_add_wiki_btn = QPushButton("Add wiki...")
+        self.pending_add_wiki_btn.clicked.connect(self._add_pending_wiki)
+        pending_controls_layout.addWidget(self.pending_add_wiki_btn)
         self.pending_layout.addLayout(pending_controls_layout)
 
         self.pending_list = QListWidget()
@@ -211,6 +242,11 @@ class MainWindow(QMainWindow):
         self.pending_clear_btn = QPushButton("Clear pending")
         self.pending_clear_btn.clicked.connect(self._clear_pending_sources)
         pending_actions_layout.addWidget(self.pending_clear_btn)
+
+        self.pending_cancel_discovery_btn = QPushButton("Cancel discovery")
+        self.pending_cancel_discovery_btn.clicked.connect(self._cancel_wiki_discovery)
+        self.pending_cancel_discovery_btn.setVisible(False)
+        pending_actions_layout.addWidget(self.pending_cancel_discovery_btn)
         pending_actions_layout.addStretch(1)
         self.pending_layout.addLayout(pending_actions_layout)
 
@@ -258,6 +294,10 @@ class MainWindow(QMainWindow):
         self.workspace_path_label = QLabel("")
         workspace_actions_layout.addWidget(self.workspace_path_label, stretch=1)
 
+        self.new_workspace_btn = QPushButton("New workspace...")
+        self.new_workspace_btn.clicked.connect(self._new_workspace)
+        workspace_actions_layout.addWidget(self.new_workspace_btn)
+
         self.load_workspace_btn = QPushButton("Load workspace...")
         self.load_workspace_btn.clicked.connect(self._load_workspace_from_dialog)
         workspace_actions_layout.addWidget(self.load_workspace_btn)
@@ -266,6 +306,13 @@ class MainWindow(QMainWindow):
         self.save_workspace_btn.clicked.connect(self._save_workspace_from_dialog)
         workspace_actions_layout.addWidget(self.save_workspace_btn)
         layout.addWidget(workspace_actions_group)
+
+        identity_group = QGroupBox("Workspace")
+        identity_layout = QFormLayout(identity_group)
+        self.workspace_label_edit = QLineEdit()
+        self.workspace_label_edit.setText(self._workspace.label)
+        identity_layout.addRow("Label:", self.workspace_label_edit)
+        layout.addWidget(identity_group)
 
         # --- Input files ---
         input_group = QGroupBox(
@@ -294,6 +341,18 @@ class MainWindow(QMainWindow):
         self.clear_input_btn.clicked.connect(self._clear_input_files)
         input_btn_layout.addWidget(self.clear_input_btn)
         input_layout.addLayout(input_btn_layout)
+        self.input_files_table = QTableWidget(0, 2)
+        self.input_files_table.setHorizontalHeaderLabels(["Input file", "Format"])
+        self.input_files_table.verticalHeader().setVisible(False)
+        self.input_files_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        input_header = self.input_files_table.horizontalHeader()
+        input_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        input_header.setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        input_layout.addWidget(self.input_files_table)
         layout.addWidget(input_group)
 
         # --- Output directory ---
@@ -312,13 +371,6 @@ class MainWindow(QMainWindow):
         # --- Format + filename row ---
         options_layout = QHBoxLayout()
 
-        fmt_group = QGroupBox("Export format")
-        fmt_inner = QVBoxLayout(fmt_group)
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(list(FORMAT_OPTIONS.keys()))
-        fmt_inner.addWidget(self.format_combo)
-        options_layout.addWidget(fmt_group)
-
         fname_group = QGroupBox("Output filename")
         fname_inner = QVBoxLayout(fname_group)
         fname_row = QHBoxLayout()
@@ -331,6 +383,12 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(fname_group)
 
         layout.addLayout(options_layout)
+
+        output_files_group = QGroupBox("Output files")
+        output_files_layout = QVBoxLayout(output_files_group)
+        self.output_files_list = QListWidget()
+        output_files_layout.addWidget(self.output_files_list)
+        layout.addWidget(output_files_group)
 
         # --- Convert button + progress ---
         action_layout = QHBoxLayout()
@@ -394,12 +452,16 @@ class MainWindow(QMainWindow):
         self.input_text.textChanged.connect(self._on_sources_changed)
         self.output_dir_edit.textChanged.connect(self._on_output_dir_changed)
         self.filename_edit.textEdited.connect(self._on_filename_edited)
+        self.workspace_label_edit.textChanged.connect(self._on_workspace_label_changed)
+        self.base_dir_edit.editingFinished.connect(self._save_base_directory_setting)
         self._apply_auto_filename()
         self._refresh_output_directory_display()
         self._refresh_workspace_path_display()
 
     def _refresh_workspace_path_display(self):
-        self.workspace_path_label.setText(f"Workspace file: {self._workspace_path}")
+        self.workspace_path_label.setText(
+            f"{self._workspace.label} - Workspace file: {self._workspace_path}"
+        )
 
     def _set_status_message(
         self,
@@ -446,13 +508,100 @@ class MainWindow(QMainWindow):
             return
         self._workspace.target_dir = self.output_dir_edit.text().strip()
         self._workspace.pending_sources = self._resolved_workspace_sources()
+        self._workspace.source_formats = {
+            source: format_label
+            for source, format_label in self._workspace.source_formats.items()
+            if source in self._workspace.pending_sources
+            and format_label in FORMAT_OPTIONS
+        }
+        self._sync_wiki_inclusion()
         self._workspace.settings = self._current_workspace_settings()
         self._refresh_pending_list()
+        self._refresh_workspace_file_lists()
         self._refresh_converted_table()
+        self._refresh_workspace_path_display()
 
     def _refresh_pending_list(self):
         self.pending_list.clear()
         self.pending_list.addItems(self._workspace.pending_sources)
+
+    def _refresh_workspace_file_lists(self):
+        self.input_files_table.setRowCount(0)
+        self.output_files_list.clear()
+        default_format = self.format_combo.currentText()
+        for source in self._workspace.pending_sources:
+            row = self.input_files_table.rowCount()
+            self.input_files_table.insertRow(row)
+            self.input_files_table.setItem(row, 0, QTableWidgetItem(source))
+            format_combo = QComboBox()
+            format_combo.addItems(list(FORMAT_OPTIONS.keys()))
+            format_combo.setCurrentText(
+                self._workspace.source_formats.get(source, default_format)
+            )
+            format_combo.currentTextChanged.connect(
+                lambda label, selected_source=source: self._set_source_format(
+                    selected_source, label
+                )
+            )
+            self.input_files_table.setCellWidget(row, 1, format_combo)
+        self.output_files_list.addItems(self._planned_output_names())
+
+    def _set_source_format(self, source: str, format_label: str):
+        if self._applying_workspace or source not in self._workspace.pending_sources:
+            return
+        if format_label == self.format_combo.currentText():
+            self._workspace.source_formats.pop(source, None)
+        else:
+            self._workspace.source_formats[source] = format_label
+        self._update_auto_filename()
+        self._refresh_output_files_list()
+
+    def _refresh_output_files_list(self):
+        self.output_files_list.clear()
+        self.output_files_list.addItems(self._planned_output_names())
+
+    def _planned_output_names(self) -> list[str]:
+        names = [
+            self._planned_output_name(source)
+            for source in self._workspace.pending_sources
+        ]
+        if any(
+            self._workspace.find_wiki_page(source) is not None
+            for source in self._workspace.pending_sources
+        ):
+            return names
+
+        output_dir_text = self.output_dir_edit.text().strip()
+        output_dir = Path(output_dir_text) if output_dir_text else None
+        occupied: set[str] = set()
+        planned: list[str] = []
+        for name in names:
+            candidate = Path(name)
+            counter = 1
+            while candidate.name.casefold() in occupied or (
+                output_dir is not None and (output_dir / candidate.name).exists()
+            ):
+                candidate = Path(f"{Path(name).stem}_{counter}{Path(name).suffix}")
+                counter += 1
+            occupied.add(candidate.name.casefold())
+            planned.append(candidate.name)
+        return planned
+
+    def _planned_output_name(self, source: str) -> str:
+        format_label = self._workspace.source_formats.get(
+            source, self.format_combo.currentText()
+        )
+        extension = FORMAT_OPTIONS[format_label]["ext"]
+        page = self._workspace.find_wiki_page(source)
+        if page is not None and page.output_filename:
+            return str(Path(page.output_filename).with_suffix(extension))
+        if (
+            len(self._workspace.pending_sources) == 1
+            and not self._auto_filename_enabled
+            and self.filename_edit.text().strip()
+        ):
+            return self.filename_edit.text().strip()
+        return f"{_get_source_stem(source)}{extension}"
 
     def _refresh_converted_table(self):
         rows = [item.to_dict() for item in self._workspace.converted_items]
@@ -489,6 +638,16 @@ class MainWindow(QMainWindow):
             self._applying_workspace = False
         self._sync_workspace_from_ui()
 
+    def _sync_wiki_inclusion(self):
+        pending_set = set(self._workspace.pending_sources)
+        for wiki_import in self._workspace.wiki_imports:
+            for page in wiki_import.pages:
+                page.included = bool(
+                    pending_set.intersection(
+                        {page.original_url, page.canonical_url, *page.aliases}
+                    )
+                )
+
     def _append_pending_sources(self, entries: list[str]):
         raw = "\n".join(entries)
         sources, errors = _resolve_sources(raw)
@@ -516,6 +675,7 @@ class MainWindow(QMainWindow):
         try:
             self._workspace = workspace
 
+            self.workspace_label_edit.setText(workspace.label)
             self.output_dir_edit.setText(workspace.target_dir)
             self.input_text.setPlainText("\n".join(workspace.pending_sources))
 
@@ -548,14 +708,34 @@ class MainWindow(QMainWindow):
         self._apply_workspace_to_ui(workspace)
         self._set_status_message(f"Loaded workspace: {path}")
 
+    def _create_new_workspace(self, label: str, directory: Path, path: Path):
+        directory.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        workspace = WorkspaceData(
+            label=label,
+            target_dir=str(directory),
+            settings=WorkspaceSettings(format_label=self.format_combo.currentText()),
+        )
+        self._workspace_path = path
+        self._apply_workspace_to_ui(workspace)
+        self._save_workspace_to_path(path)
+
     def _get_default_output_filename(self) -> str:
         format_label = self.format_combo.currentText()
-        ext = FORMAT_OPTIONS[format_label]["ext"]
         raw = self.input_text.toPlainText().strip()
 
         if raw:
             sources, _ = _resolve_sources(raw)
             if sources:
+                source_key = (
+                    str(sources[0].resolve())
+                    if isinstance(sources[0], Path)
+                    else str(sources[0])
+                )
+                format_label = self._workspace.source_formats.get(
+                    source_key, format_label
+                )
+                ext = FORMAT_OPTIONS[format_label]["ext"]
                 return f"{_get_source_stem(sources[0])}{ext}"
 
             first_line = next(
@@ -568,9 +748,12 @@ class MainWindow(QMainWindow):
                     stem = _get_source_stem(first_line)
                 else:
                     stem = Path(first_line).stem or "document"
-                return f"{stem}{ext}"
+                format_label = self._workspace.source_formats.get(
+                    first_line, format_label
+                )
+                return f"{stem}{FORMAT_OPTIONS[format_label]['ext']}"
 
-        return f"document{ext}"
+        return f"document{FORMAT_OPTIONS[format_label]['ext']}"
 
     def _apply_auto_filename(self):
         filename = self._get_default_output_filename()
@@ -625,6 +808,48 @@ class MainWindow(QMainWindow):
     # --- Slots ---
 
     @Slot()
+    def _new_workspace(self):
+        dialog = NewWorkspaceDialog(self._base_directory, self)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+        label, directory, path = dialog.values()
+        if path.exists():
+            response = QMessageBox.question(
+                self,
+                "Replace workspace file",
+                f"The workspace file already exists:\n\n{path}\n\nReplace it?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if response != QMessageBox.StandardButton.Yes:
+                return
+        self._create_new_workspace(label, directory, path)
+
+    @Slot()
+    def _browse_base_directory(self):
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select workspace base directory", self.base_dir_edit.text()
+        )
+        if directory:
+            self.base_dir_edit.setText(directory)
+            self._save_base_directory_setting()
+
+    @Slot()
+    def _save_base_directory_setting(self):
+        value = self.base_dir_edit.text().strip()
+        if not value:
+            return
+        self._base_directory = Path(value).expanduser()
+        save_base_directory(self._base_directory)
+
+    @Slot(str)
+    def _on_workspace_label_changed(self, label: str):
+        if self._applying_workspace:
+            return
+        self._workspace.label = label.strip() or "Workspace"
+        self._refresh_workspace_path_display()
+
+    @Slot()
     def _browse_input_files(self):
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select input file(s)", "", FILE_FILTER
@@ -661,6 +886,76 @@ class MainWindow(QMainWindow):
             return
         self.pending_url_edit.setText("")
         self._append_pending_sources([url])
+
+    @Slot()
+    def _add_pending_wiki(self):
+        initial_url = self.pending_url_edit.text().strip()
+        dialog = WikiImportDialog(self, initial_url)
+        if dialog.exec() != dialog.DialogCode.Accepted:
+            return
+
+        options = dialog.values()
+        start_identity = canonicalize_url(options["start_url"])
+        if options["root_url"] != start_identity:
+            response = QMessageBox.question(
+                self,
+                "Confirm wiki root",
+                "The inferred or selected wiki root differs from the starting page.\n\n"
+                f"Starting page: {options['start_url']}\n"
+                f"Wiki root: {options['root_url']}\n\n"
+                "Discover all eligible links under this root?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if response != QMessageBox.StandardButton.Yes:
+                return
+
+        self.pending_url_edit.clear()
+        self.pending_add_wiki_btn.setEnabled(False)
+        self.pending_cancel_discovery_btn.setVisible(True)
+        self._set_status_message("Starting wiki discovery...", busy=True)
+        self._discovery_worker = WikiDiscoveryWorker(**options)
+        self._discovery_worker.progress.connect(self._on_progress)
+        self._discovery_worker.result_ready.connect(self._on_wiki_discovered)
+        self._discovery_worker.failed.connect(self._on_wiki_discovery_failed)
+        self._discovery_worker.finished.connect(self._on_wiki_discovery_finished)
+        self._discovery_worker.start()
+
+    @Slot()
+    def _cancel_wiki_discovery(self):
+        if self._discovery_worker and self._discovery_worker.isRunning():
+            self._discovery_worker.cancel()
+            self._set_status_message("Cancelling wiki discovery...", busy=True)
+
+    @Slot(object, object)
+    def _on_wiki_discovered(self, wiki_import, warnings):
+        self._workspace.wiki_imports.append(wiki_import)
+        discovered_sources = [page.original_url for page in wiki_import.pages]
+        merged = list(self._workspace.pending_sources)
+        for source in discovered_sources:
+            if source not in merged:
+                merged.append(source)
+        self._set_pending_sources(merged)
+        message = f"Discovered {len(wiki_import.pages)} wiki page(s)."
+        if warnings:
+            message += f" {len(warnings)} warning(s): " + "; ".join(warnings[:3])
+        self._set_status_message(
+            message,
+            style="color: #9a6700;" if warnings else "color: green;",
+        )
+
+    @Slot(str)
+    def _on_wiki_discovery_failed(self, message: str):
+        self._set_status_message(
+            f"Wiki discovery failed: {message}",
+            style="color: red;",
+        )
+
+    @Slot()
+    def _on_wiki_discovery_finished(self):
+        self.pending_add_wiki_btn.setEnabled(True)
+        self.pending_cancel_discovery_btn.setVisible(False)
+        self._discovery_worker = None
 
     @Slot()
     def _remove_selected_pending_sources(self):
@@ -737,6 +1032,7 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_output_dir_changed(self, _text: str):
         self._refresh_output_directory_display()
+        self._refresh_output_files_list()
         self._sync_workspace_from_ui()
 
     @Slot(str)
@@ -751,12 +1047,14 @@ class MainWindow(QMainWindow):
             return
 
         self._auto_filename_enabled = False
+        self._refresh_output_files_list()
         self._sync_workspace_from_ui()
 
     @Slot()
     def _on_auto_filename_clicked(self):
         self._auto_filename_enabled = True
         self._apply_auto_filename()
+        self._refresh_output_files_list()
         self._sync_workspace_from_ui()
 
     @Slot()
@@ -788,6 +1086,30 @@ class MainWindow(QMainWindow):
         if not sources and not errors:
             errors.append("No valid input files resolved.")
 
+        wiki_sources = [
+            str(source)
+            for source in sources
+            if self._workspace.find_wiki_page(str(source)) is not None
+        ]
+        source_formats = {
+            str(source): self._workspace.source_formats.get(
+                str(source), format_label
+            )
+            for source in sources
+        }
+        wiki_format_labels = {
+            source_formats[source] for source in wiki_sources
+        }
+        if wiki_sources and any(
+            FORMAT_OPTIONS[label]["key"] not in {"markdown", "html"}
+            for label in wiki_format_labels
+        ):
+            errors.append("Wiki batches currently support Markdown and HTML only.")
+        if wiki_sources and len(wiki_sources) != len(sources):
+            errors.append(
+                "Convert wiki pages separately from ordinary files and URLs."
+            )
+
         if errors:
             self._set_status_message(
                 "Validation errors: " + "; ".join(errors),
@@ -798,6 +1120,31 @@ class MainWindow(QMainWindow):
 
         # Start worker
         fmt_info = FORMAT_OPTIONS[format_label]
+        if wiki_sources:
+            assert output_dir is not None
+            conflicts = planned_wiki_conflicts(
+                wiki_sources,
+                self._workspace.wiki_imports,
+                output_dir,
+                fmt_info["ext"],
+                source_formats,
+            )
+            if conflicts:
+                conflict_text = "\n".join(str(path) for path in conflicts)
+                response = QMessageBox.question(
+                    self,
+                    "Confirm wiki overwrite",
+                    "The following wiki output files already exist:\n\n"
+                    f"{conflict_text}\n\n"
+                    "Overwrite every listed file?",
+                    QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.Cancel,
+                    QMessageBox.StandardButton.Cancel,
+                )
+                if response != QMessageBox.StandardButton.Yes:
+                    self._set_status_message("Wiki conversion cancelled.")
+                    return
+
         self.convert_btn.setEnabled(False)
         self.pending_convert_btn.setEnabled(False)
         self.clear_input_btn.setEnabled(False)
@@ -806,7 +1153,19 @@ class MainWindow(QMainWindow):
         self.open_folder_btn.setVisible(False)
 
         assert output_dir is not None  # guaranteed by validation above
-        self._worker = ConversionWorker(sources, output_dir, fmt_info, custom_filename)
+        if wiki_sources:
+            self._worker = WikiConversionWorker(
+                sources,
+                self._workspace.wiki_imports,
+                output_dir,
+                fmt_info,
+                custom_filename,
+                source_formats,
+            )
+        else:
+            self._worker = ConversionWorker(
+                sources, output_dir, fmt_info, custom_filename, source_formats
+            )
         self._worker.progress.connect(self._on_progress)
         self._worker.result_ready.connect(self._on_finished)
         self._worker.finished.connect(self._on_worker_finished)
@@ -865,9 +1224,28 @@ class MainWindow(QMainWindow):
         self._worker = None
 
     def closeEvent(self, event):
+        still_running = []
+        if self._discovery_worker and self._discovery_worker.isRunning():
+            self._discovery_worker.cancel()
+            if not self._discovery_worker.wait(5000):
+                still_running.append(self._discovery_worker)
         if self._worker and self._worker.isRunning():
-            self._worker.wait(5000)
+            if not self._worker.wait(5000):
+                still_running.append(self._worker)
+        if still_running:
+            event.ignore()
+            self._set_status_message("Waiting for active work to finish...", busy=True)
+            if not self._close_pending:
+                self._close_pending = True
+                for worker in still_running:
+                    worker.finished.connect(self._retry_close)
+            return
         super().closeEvent(event)
+
+    @Slot()
+    def _retry_close(self):
+        self._close_pending = False
+        self.close()
 
 
 # ---------------------------------------------------------------------------

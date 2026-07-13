@@ -33,12 +33,26 @@ Automated coverage currently includes:
 - `test_workspace_paths.py`
   - app-home path resolution
   - default workspace/output/file path conventions
+- `test_workspace_ui.py`
+  - workspace label slugging and workspace filename resolution
+- `test_app_settings.py`
+  - application base-directory persistence
+- `test_wiki_urls.py`
+  - URL canonicalization, root/scope rules, sub-wiki traversal, safe flattened
+    filenames, and deterministic collisions
+- `test_wiki_discovery.py`
+  - cyclic graph discovery, snapshots, provenance, sub-wiki depth, redirect
+    aliases/boundaries, and optional assets
+- `test_wiki_conversion.py`
+  - Markdown/HTML provenance helpers, safe link rewriting, cached conversion,
+    balanced-parenthesis URLs, and overwrite conflict planning
 - `test_main.py`
   - source resolution, output-directory helpers, PDF chunking helpers, and
     `ConversionWorker`
   - tab construction for **Settings**, **Workspace**, **Pending**, and
     **Converted**
   - workspace save/load UI plumbing
+  - new workspace creation and per-input output format planning
   - pending-queue expansion, add/remove behavior, and queue-backed conversion
     startup
   - shared progress/status propagation across tabs
@@ -57,6 +71,7 @@ The following still need manual verification:
   `QFileDialog.getExistingDirectory`, workspace open/save dialogs)
 - drag-and-drop interaction in `FileDropTextEdit`
 - end-to-end GUI timing and race behavior under heavy conversion loads
+- real public-site discovery behavior, `robots.txt`, and network failure timing
 
 ## Manual Smoke Checks
 
@@ -85,3 +100,13 @@ Verify these behaviors interactively:
    from **Pending**, and it appears in **Converted**.
 6. Confirm the shared processing state updates on the **Workspace**,
    **Pending**, and **Converted** tabs during an active conversion.
+7. Import `https://foundryvtt.com/api/v13/` as a whole wiki, confirm the inferred
+   root, cancel once, then rediscover and review Pending pages.
+8. Import
+   `https://www.dandwiki.com/wiki/Hyrule_(5e_Campaign_Setting)` as a sub-wiki.
+   Expected: the starting page, child-directory pages, and one level of
+   same-directory links are queued without loops.
+9. Convert a small wiki selection to Markdown and HTML. Expected: flattened
+   filenames, local links, and `original_url`/`fetched_at` provenance are present.
+10. Repeat with assets enabled and an existing target file. Expected: assets are
+    written below `assets/`, and the full conflict list requires confirmation.

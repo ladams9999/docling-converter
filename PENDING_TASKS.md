@@ -10,3 +10,8 @@ Tasks below are intentionally small and individually pickable.
   native dialogs, and full interactive GUI flows.
 - Add packaging and release documentation for distributing Docling Converter to
   non-developer desktop users.
+- Add authenticated/private wiki support only after credential storage and
+  private-network policy are designed.
+- Extend wiki batches to JSON and DocTags with explicit link/output semantics.
+- Add site-specific wiki adapters if generic path/link traversal proves
+  insufficient.

@@ -4,7 +4,8 @@ Docling Converter is a PySide6 desktop application for converting supported
 documents with [Docling](https://github.com/docling-project/docling). It now uses
 a workspace-oriented flow with top-level **Settings**, **Workspace**,
 **Pending**, and **Converted** tabs. It accepts local file paths, directories,
-and HTTP/HTTPS URLs, then exports results to Markdown, HTML, JSON, or DocTags.
+HTTP/HTTPS URLs, and public wiki-like sites, then exports results to Markdown,
+HTML, JSON, or DocTags.
 
 ## Prerequisites
 
@@ -29,31 +30,62 @@ uv run python main.py
 
 ## How to Use It
 
-1. Add one or more sources by pasting paths or URLs, dragging files into the
+1. Set the workspace base directory on **Settings**. Use **New workspace...**
+   to choose a label, output directory, and workspace filename.
+2. Add one or more sources by pasting paths or URLs, dragging files into the
    Workspace tab input area, or use **Browse files...**.
-2. Choose an output directory on the **Workspace** tab, or leave it empty and
+3. Choose an output directory on the **Workspace** tab, or leave it empty and
    let the app auto-select one from the first writable local source directory
    or your Downloads folder.
-3. Save or load a workspace file from the **Workspace** tab when needed.
-4. Review and adjust the queued items on the **Pending** tab. You can add files,
-   add a directory, add a single URL, remove selected items, or clear the queue.
-5. Use the **Settings** tab controls to choose an export format and output
-   filename behavior.
-6. Start conversion from **Convert** on the Workspace tab or **Convert pending**
+4. Save or load a workspace file from the **Workspace** tab when needed. The
+   workspace label can be changed at any time.
+5. Review the Input files and Output files lists. Choose a default export
+   format on **Settings**, then change individual input formats as needed.
+6. Review and adjust the queued items on the **Pending** tab. You can add files,
+   a directory, a single URL, or a wiki import; remove selected items; or clear
+   the queue.
+7. Start conversion from **Convert** on the Workspace tab or **Convert pending**
    on the Pending tab.
-7. Review completed items on the **Converted** tab.
+8. Review completed items on the **Converted** tab.
 
 The workspace queue drives conversion. When a queued item converts
 successfully, it moves into the converted history and is removed from the
 pending list. When a conversion finishes with a valid output directory,
 **Open output directory** opens it in the native file explorer.
 
+### Import a Wiki
+
+1. Click **Add wiki...** on the **Pending** tab and enter any page in a public,
+   authentication-free wiki-like site.
+2. Choose **Whole wiki** or **Sub-wiki**, review the inferred root, and choose
+   whether to respect `robots.txt` and download linked assets.
+3. Confirm a root that differs from the starting page, then monitor or cancel
+   background discovery.
+4. Remove pages you do not want from **Pending** and select Markdown or HTML.
+5. Convert the queue. Wiki files use flattened path-based names in one output
+   directory, and links between successful pages are rewritten locally.
+
+**Whole wiki** follows eligible links recursively under the confirmed root.
+**Sub-wiki** always includes the starting page, recursively follows linked pages
+in child directories, and includes one level of pages linked in the starting
+page's directory. URL fragments identify headings, not separate pages.
+
+Discovery snapshots pages under `~/.docling-converter/cache/wiki/`. Markdown
+outputs start with YAML provenance containing `original_url` and `fetched_at`;
+HTML outputs contain the same values in a leading comment. If assets are
+enabled, they are copied to an `assets` directory. Existing output conflicts are
+listed for confirmation before wiki files are overwritten.
+
+For example, a page at `a/subject/page.html` becomes
+`a-subject-page.md` or `a-subject-page.html`. Links to excluded, failed, or
+external pages remain absolute web URLs.
+
 ## Supported Formats
 
 ### Input
 
 | Format | Extensions |
-|--------|------------|
+| ------ | ---------- |
 | PDF | `.pdf` |
 | Microsoft Word | `.docx` |
 | Microsoft PowerPoint | `.pptx` |
@@ -66,7 +98,7 @@ pending list. When a conversion finishes with a valid output directory,
 ### Output
 
 | Format | Extension |
-|--------|-----------|
+| ------ | --------- |
 | Markdown | `.md` |
 | HTML | `.html` |
 | JSON | `.json` |
@@ -76,11 +108,20 @@ pending list. When a conversion finishes with a valid output directory,
 
 - The default workspace file lives under
   `~/.docling-converter/default-workspace/workspace.json`.
+- The default base directory for new workspaces is
+  `~/.docling-converter/workspaces` and can be changed on **Settings**.
 - Docling may download model data on first use, which can take time and
   requires internet access.
 - Large PDFs are chunked before conversion when they exceed the configured page
   count or size thresholds.
 - Conversion runs in a background thread so the GUI remains responsive.
+- Wiki batches currently support Markdown and HTML. Convert wiki pages separately
+  from ordinary queued sources.
+- Wiki discovery has no page-count limit; use the live count and
+  **Cancel discovery** when needed. Request, response, and asset-size safeguards
+  still apply.
+- Authentication, browser cookies, localhost, and private-network wiki targets
+  are not supported.
 
 ## Testing
 

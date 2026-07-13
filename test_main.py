@@ -12,6 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import main
 from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
 from workspace_persistence import save_workspace
+from wiki_model import WikiImport, WikiPage
 
 
 @pytest.fixture(scope="session")
@@ -263,11 +264,14 @@ class _FakeSignal:
 class _MockConversionWorker(main.ConversionWorker):
     instances = []
 
-    def __init__(self, sources, output_dir, fmt_info, custom_filename):
+    def __init__(
+        self, sources, output_dir, fmt_info, custom_filename, source_formats=None
+    ):
         self.sources = sources
         self.output_dir = output_dir
         self.fmt_info = fmt_info
         self.custom_filename = custom_filename
+        self.source_formats = source_formats or {}
         self.progress = _FakeSignal()
         self.result_ready = _FakeSignal()
         # Suppress type checking for finished signal override
@@ -403,6 +407,62 @@ def test_main_window_builds_required_tabs(qapp):
     window.close()
 
 
+def test_create_new_workspace_seeds_label_directory_and_file(qapp, tmp_path):
+    output_directory = tmp_path / "research"
+    workspace_path = tmp_path / "research.json"
+    window = main.MainWindow()
+
+    window._create_new_workspace("Research", output_directory, workspace_path)
+
+    restored = main.load_workspace(workspace_path)
+    assert restored.label == "Research"
+    assert restored.target_dir == str(output_directory)
+    assert output_directory.is_dir()
+    assert window.workspace_label_edit.text() == "Research"
+    assert "Research" in window.workspace_path_label.text()
+    window.close()
+
+
+def test_workspace_input_format_changes_derived_output_file(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+    window = main.MainWindow()
+
+    window._append_pending_sources([str(input_file)])
+
+    assert window.input_files_table.rowCount() == 1
+    assert window.output_files_list.item(0).text() == "sample.md"
+    format_combo = window.input_files_table.cellWidget(0, 1)
+    format_combo.setCurrentText("HTML (.html)")
+    assert window._workspace.source_formats[str(input_file.resolve())] == (
+        "HTML (.html)"
+    )
+    assert window.output_files_list.item(0).text() == "sample.html"
+    window.close()
+
+
+def test_output_files_list_plans_unique_ordinary_names(qapp, tmp_path):
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    first = first_dir / "report.pdf"
+    second = second_dir / "report.pdf"
+    first.write_text("x", encoding="utf-8")
+    second.write_text("x", encoding="utf-8")
+    (tmp_path / "report.md").write_text("existing", encoding="utf-8")
+    window = main.MainWindow()
+
+    window.output_dir_edit.setText(str(tmp_path))
+    window._append_pending_sources([str(first), str(second)])
+
+    assert [
+        window.output_files_list.item(index).text()
+        for index in range(window.output_files_list.count())
+    ] == ["report_1.md", "report_2.md"]
+    window.close()
+
+
 def test_save_workspace_to_path_persists_current_ui_state(qapp, tmp_path):
     input_file = tmp_path / "sample.pdf"
     input_file.write_text("x", encoding="utf-8")
@@ -457,7 +517,9 @@ def test_load_workspace_to_path_applies_workspace_state(qapp, tmp_path):
     )
     assert window.format_combo.currentText() == "HTML (.html)"
     assert window.filename_edit.text() == "custom.html"
-    assert window.workspace_path_label.text() == f"Workspace file: {workspace_path}"
+    assert window.workspace_path_label.text() == (
+        f"Default workspace - Workspace file: {workspace_path}"
+    )
     assert window.converted_table.rowCount() == 1
     assert window.converted_table.item(0, 2).text() == "sample.md"
     window.close()
@@ -498,6 +560,104 @@ def test_remove_selected_pending_sources_updates_workspace_and_input(qapp, tmp_p
 
     assert window._workspace.pending_sources == [str(second.resolve())]
     assert window.input_text.toPlainText() == str(second.resolve())
+    window.close()
+
+
+def test_discovered_wiki_pages_join_pending_and_removal_excludes_page(qapp):
+    window = main.MainWindow()
+    page = WikiPage(
+        id="page-1",
+        import_id="import-1",
+        original_url="https://example.com/wiki/page",
+        canonical_url="https://example.com/wiki/page",
+        fetched_at="2026-07-12T18:00:00Z",
+        relative_path="page",
+        output_filename="page.md",
+        snapshot_key="pages/page.html",
+        content_hash="abc",
+    )
+    wiki_import = WikiImport(
+        id="import-1",
+        start_url=page.original_url,
+        root_url="https://example.com/wiki/",
+        scope="whole",
+        pages=[page],
+    )
+
+    window._on_wiki_discovered(wiki_import, [])
+
+    assert window._workspace.wiki_imports == [wiki_import]
+    assert window._workspace.pending_sources == [page.original_url]
+    assert window.pending_list.count() == 1
+
+    window.pending_list.setCurrentRow(0)
+    window._remove_selected_pending_sources()
+
+    assert page.included is False
+    assert window._workspace.pending_sources == []
+    window.close()
+
+
+def test_wiki_batch_rejects_json_before_starting_worker(qapp, tmp_path):
+    window = main.MainWindow()
+    page = WikiPage(
+        id="page-1",
+        import_id="import-1",
+        original_url="https://example.com/wiki/page",
+        canonical_url="https://example.com/wiki/page",
+        fetched_at="2026-07-12T18:00:00Z",
+        relative_path="page",
+        output_filename="page.md",
+    )
+    window._workspace.wiki_imports = [
+        WikiImport(
+            id="import-1",
+            start_url=page.original_url,
+            root_url="https://example.com/wiki/",
+            scope="whole",
+            pages=[page],
+        )
+    ]
+    window._set_pending_sources([page.original_url])
+    window.output_dir_edit.setText(str(tmp_path))
+    window._set_source_format(page.original_url, "JSON (.json)")
+
+    window._start_conversion()
+
+    assert window._worker is None
+    assert "Markdown and HTML only" in window.status_label.text()
+    window.close()
+
+
+def test_wiki_batch_rejects_mixed_ordinary_sources(qapp, tmp_path):
+    local_file = tmp_path / "local.html"
+    local_file.write_text("<p>Local</p>", encoding="utf-8")
+    page = WikiPage(
+        id="page-1",
+        import_id="import-1",
+        original_url="https://example.com/wiki/page",
+        canonical_url="https://example.com/wiki/page",
+        fetched_at="2026-07-12T18:00:00Z",
+        relative_path="page",
+        output_filename="page.md",
+    )
+    window = main.MainWindow()
+    window._workspace.wiki_imports = [
+        WikiImport(
+            id="import-1",
+            start_url=page.original_url,
+            root_url="https://example.com/wiki/",
+            scope="whole",
+            pages=[page],
+        )
+    ]
+    window._set_pending_sources([page.original_url, str(local_file)])
+    window.output_dir_edit.setText(str(tmp_path))
+
+    window._start_conversion()
+
+    assert window._worker is None
+    assert "separately" in window.status_label.text()
     window.close()
 
 
