@@ -35,15 +35,18 @@ SUPPORTED_EXTENSIONS = {
     ".bmp",
     ".tex",
     ".md",
+    ".epub",
+    ".txt",
 }
 
 FILE_FILTER = (
     "All supported (*.pdf *.docx *.pptx *.xlsx *.html *.htm "
-    "*.png *.jpg *.jpeg *.tiff *.tif *.bmp *.tex *.md);;"
+    "*.png *.jpg *.jpeg *.tiff *.tif *.bmp *.tex *.md *.epub *.txt);;"
     "PDF (*.pdf);;Word (*.docx);;PowerPoint (*.pptx);;"
     "Excel (*.xlsx);;HTML (*.html *.htm);;"
     "Images (*.png *.jpg *.jpeg *.tiff *.tif *.bmp);;"
-    "LaTeX (*.tex);;Markdown (*.md);;All files (*)"
+    "LaTeX (*.tex);;Markdown (*.md);;EPUB (*.epub);;"
+    "Plain text (*.txt);;All files (*)"
 )
 
 STATUS_ICON_SUCCESS = "✅"

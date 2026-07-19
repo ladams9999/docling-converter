@@ -70,7 +70,7 @@ def test_resolve_sources_expands_directory_supported_only(tmp_path):
     folder = tmp_path / "inputs"
     folder.mkdir()
     supported = folder / "a.pdf"
-    unsupported = folder / "z.txt"
+    unsupported = folder / "z.rtf"
     supported.write_text("x", encoding="utf-8")
     unsupported.write_text("x", encoding="utf-8")
 
@@ -80,10 +80,24 @@ def test_resolve_sources_expands_directory_supported_only(tmp_path):
     assert sources == [supported]
 
 
+def test_resolve_sources_expands_directory_includes_epub_and_txt(tmp_path):
+    folder = tmp_path / "inputs"
+    folder.mkdir()
+    epub = folder / "book.epub"
+    txt = folder / "notes.txt"
+    epub.write_text("x", encoding="utf-8")
+    txt.write_text("x", encoding="utf-8")
+
+    sources, errors = main._resolve_sources(str(folder))
+
+    assert errors == []
+    assert sources == [epub, txt]
+
+
 def test_resolve_sources_directory_without_supported_files_adds_error(tmp_path):
     folder = tmp_path / "empty_supported"
     folder.mkdir()
-    (folder / "note.txt").write_text("x", encoding="utf-8")
+    (folder / "note.rtf").write_text("x", encoding="utf-8")
 
     sources, errors = main._resolve_sources(str(folder))
 
@@ -530,7 +544,7 @@ def test_append_pending_sources_expands_directory_and_updates_queue(qapp, tmp_pa
     folder.mkdir()
     supported = folder / "a.pdf"
     supported.write_text("x", encoding="utf-8")
-    (folder / "note.txt").write_text("x", encoding="utf-8")
+    (folder / "note.rtf").write_text("x", encoding="utf-8")
 
     window = main.MainWindow()
     window._append_pending_sources([str(folder), "https://example.com/doc"])
