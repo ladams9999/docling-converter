@@ -267,6 +267,106 @@ def test_worker_chunks_large_pdf_and_recombines_markdown(monkeypatch, tmp_path):
     assert captured["payload"]["rows"][0]["severity"] in {"success", "warning"}
 
 
+def _install_fake_docling_format_options(monkeypatch):
+    """Install fake docling modules that record DocumentConverter's format_options."""
+
+    class _FakeInputFormat:
+        PDF = "pdf"
+        IMAGE = "image"
+
+    class _FakePipelineOptions:
+        def __init__(self):
+            self.do_picture_description = False
+            self.enable_remote_services = False
+            self.picture_description_options = None
+
+    class _FakePictureDescriptionApiOptions:
+        def __init__(self, url, params, headers, timeout):
+            self.url = url
+            self.params = params
+            self.headers = headers
+            self.timeout = timeout
+
+    class _FakeFormatOption:
+        def __init__(self, pipeline_options):
+            self.pipeline_options = pipeline_options
+
+    converter_calls = []
+
+    class _FakeConverter:
+        def __init__(self, format_options=None):
+            self.format_options = format_options
+            converter_calls.append(self)
+
+    base_models_module = types.ModuleType("docling.datamodel.base_models")
+    base_models_module.InputFormat = _FakeInputFormat
+
+    pipeline_options_module = types.ModuleType("docling.datamodel.pipeline_options")
+    pipeline_options_module.PdfPipelineOptions = _FakePipelineOptions
+    pipeline_options_module.PictureDescriptionApiOptions = (
+        _FakePictureDescriptionApiOptions
+    )
+
+    converter_module = types.ModuleType("docling.document_converter")
+    converter_module.DocumentConverter = _FakeConverter
+    converter_module.PdfFormatOption = _FakeFormatOption
+    converter_module.ImageFormatOption = _FakeFormatOption
+
+    docling_module = types.ModuleType("docling")
+    docling_module.__path__ = []
+    datamodel_module = types.ModuleType("docling.datamodel")
+    datamodel_module.__path__ = []
+
+    monkeypatch.setitem(sys.modules, "docling", docling_module)
+    monkeypatch.setitem(sys.modules, "docling.datamodel", datamodel_module)
+    monkeypatch.setitem(sys.modules, "docling.datamodel.base_models", base_models_module)
+    monkeypatch.setitem(
+        sys.modules, "docling.datamodel.pipeline_options", pipeline_options_module
+    )
+    monkeypatch.setitem(sys.modules, "docling.document_converter", converter_module)
+
+    return converter_calls
+
+
+def test_build_document_converter_disabled_returns_plain_converter(monkeypatch):
+    from docling_converter import conversion_logic
+    from docling_converter.app_settings import VlmSettings
+
+    converter_calls = _install_fake_docling_format_options(monkeypatch)
+
+    conversion_logic._build_document_converter(VlmSettings(enabled=False))
+
+    assert len(converter_calls) == 1
+    assert converter_calls[0].format_options is None
+
+
+def test_build_document_converter_enabled_wires_picture_description(monkeypatch):
+    from docling_converter import conversion_logic
+    from docling_converter.app_settings import VlmSettings
+
+    converter_calls = _install_fake_docling_format_options(monkeypatch)
+
+    vlm_settings = VlmSettings(
+        enabled=True,
+        api_url="http://localhost:11434/v1/chat/completions",
+        model="granite3.2-vision:2b",
+        api_key="secret",
+    )
+    conversion_logic._build_document_converter(vlm_settings)
+
+    assert len(converter_calls) == 1
+    format_options = converter_calls[0].format_options
+    assert set(format_options.keys()) == {"pdf", "image"}
+    for option in format_options.values():
+        pipeline_options = option.pipeline_options
+        assert pipeline_options.do_picture_description is True
+        assert pipeline_options.enable_remote_services is True
+        desc_options = pipeline_options.picture_description_options
+        assert desc_options.url == "http://localhost:11434/v1/chat/completions"
+        assert desc_options.params == {"model": "granite3.2-vision:2b"}
+        assert desc_options.headers == {"Authorization": "Bearer secret"}
+
+
 class _FakeSignal:
     def __init__(self):
         self.callbacks = []
@@ -279,13 +379,20 @@ class _MockConversionWorker(main.ConversionWorker):
     instances = []
 
     def __init__(
-        self, sources, output_dir, fmt_info, custom_filename, source_formats=None
+        self,
+        sources,
+        output_dir,
+        fmt_info,
+        custom_filename,
+        source_formats=None,
+        vlm_settings=None,
     ):
         self.sources = sources
         self.output_dir = output_dir
         self.fmt_info = fmt_info
         self.custom_filename = custom_filename
         self.source_formats = source_formats or {}
+        self.vlm_settings = vlm_settings
         self.progress = _FakeSignal()
         self.result_ready = _FakeSignal()
         # Suppress type checking for finished signal override

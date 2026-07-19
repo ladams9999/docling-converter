@@ -110,3 +110,9 @@ Verify these behaviors interactively:
    filenames, local links, and `original_url`/`fetched_at` provenance are present.
 10. Repeat with assets enabled and an existing target file. Expected: assets are
     written below `assets/`, and the full conflict list requires confirmation.
+11. Enable "Describe pictures during conversion" on **Settings** (defaults
+    target a local Ollama server) and convert a PDF or image containing a
+    picture. Expected: the output includes a generated caption beneath the
+    `<!-- image -->` placeholder, and the row shows **success**, not
+    **warning** (docling's internal deprecation notices from the
+    picture-description path are filtered, not surfaced).

@@ -13,6 +13,8 @@ from urllib.request import Request, urlopen
 
 from PySide6.QtCore import QThread, Signal
 
+from docling_converter.app_settings import VlmSettings
+
 FORMAT_OPTIONS = {
     "Markdown (.md)": {"ext": ".md", "key": "markdown"},
     "HTML (.html)": {"ext": ".html", "key": "html"},
@@ -56,6 +58,50 @@ STATUS_ICON_ERROR = "🛑"
 PAGE_CHUNK_THRESHOLD = 30
 PDF_CHUNK_SIZE = 20
 PDF_SIZE_THRESHOLD_MB = 5.0
+VLM_API_TIMEOUT_SECONDS = 90.0
+
+
+def _build_document_converter(vlm_settings: VlmSettings | None):
+    """Build a DocumentConverter, wiring in VLM picture description if enabled.
+
+    Picture description only applies to the PDF/image pipelines (the ones
+    with real layout-detected picture regions to caption) -- other formats
+    convert with docling's defaults regardless of this setting.
+    """
+
+    from docling.document_converter import DocumentConverter
+
+    if vlm_settings is None or not vlm_settings.enabled:
+        return DocumentConverter()
+
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import (
+        PdfPipelineOptions,
+        PictureDescriptionApiOptions,
+    )
+    from docling.document_converter import ImageFormatOption, PdfFormatOption
+
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_picture_description = True
+    pipeline_options.enable_remote_services = True
+    headers = (
+        {"Authorization": f"Bearer {vlm_settings.api_key}"}
+        if vlm_settings.api_key
+        else {}
+    )
+    pipeline_options.picture_description_options = PictureDescriptionApiOptions(
+        url=vlm_settings.api_url,
+        params={"model": vlm_settings.model},
+        headers=headers,
+        timeout=VLM_API_TIMEOUT_SECONDS,
+    )
+
+    return DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+            InputFormat.IMAGE: ImageFormatOption(pipeline_options=pipeline_options),
+        }
+    )
 
 
 class ConversionWorker(QThread):
@@ -71,6 +117,7 @@ class ConversionWorker(QThread):
         fmt_info: dict,
         custom_filename: str,
         source_formats: dict[str, str] | None = None,
+        vlm_settings: VlmSettings | None = None,
     ):
         super().__init__()
         self.sources = sources
@@ -78,11 +125,10 @@ class ConversionWorker(QThread):
         self.fmt_info = fmt_info
         self.custom_filename = custom_filename
         self.source_formats = source_formats or {}
+        self.vlm_settings = vlm_settings
 
     def run(self):
-        from docling.document_converter import DocumentConverter
-
-        converter = DocumentConverter()
+        converter = _build_document_converter(self.vlm_settings)
         rows = []
         summary_lines = []
         first_preview = ""
@@ -140,6 +186,16 @@ class ConversionWorker(QThread):
 
                     with warnings.catch_warnings(record=True) as captured_warnings:
                         warnings.simplefilter("always")
+                        # docling's own internal pydantic deprecation notices
+                        # (e.g. PictureItem.annotations -> meta) fire on every
+                        # picture-description conversion regardless of caller
+                        # code; they aren't actionable, so don't surface them
+                        # as a false "Warning" status.
+                        warnings.filterwarnings(
+                            "ignore",
+                            category=DeprecationWarning,
+                            module=r"docling(\..*)?",
+                        )
                         result = converter.convert(str(target))
 
                     chunk_content = _export_document(result.document, key)

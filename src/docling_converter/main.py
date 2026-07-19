@@ -8,6 +8,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -29,8 +30,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from docling_converter.app_settings import (
+    DEFAULT_VLM_API_URL,
+    DEFAULT_VLM_MODEL,
+    VlmSettings,
     load_base_directory,
+    load_vlm_settings,
     save_base_directory,
+    save_vlm_settings,
 )
 import docling_converter.conversion_logic as _conversion_logic
 from docling_converter.conversion_logic import (
@@ -150,6 +156,7 @@ class MainWindow(QMainWindow):
         self._applying_workspace = False
         self._last_output_dir: Path | None = None
         self._base_directory = load_base_directory()
+        self._vlm_settings = load_vlm_settings()
         self._workspace_path = get_default_workspace_file()
         self._workspace = WorkspaceData()
         self._build_ui()
@@ -189,6 +196,24 @@ class MainWindow(QMainWindow):
         self.format_combo.setCurrentText(self._workspace.settings.format_label)
         default_format_layout.addWidget(self.format_combo)
         self.settings_layout.addWidget(default_format_group)
+
+        vlm_group = QGroupBox("Picture description (VLM)")
+        vlm_layout = QFormLayout(vlm_group)
+        self.vlm_enabled_check = QCheckBox("Describe pictures during conversion")
+        self.vlm_enabled_check.setChecked(self._vlm_settings.enabled)
+        vlm_layout.addRow(self.vlm_enabled_check)
+        self.vlm_api_url_edit = QLineEdit(self._vlm_settings.api_url)
+        self.vlm_api_url_edit.setPlaceholderText(
+            "OpenAI-compatible chat-completions endpoint, e.g. local Ollama"
+        )
+        vlm_layout.addRow("API URL:", self.vlm_api_url_edit)
+        self.vlm_model_edit = QLineEdit(self._vlm_settings.model)
+        vlm_layout.addRow("Model:", self.vlm_model_edit)
+        self.vlm_api_key_edit = QLineEdit(self._vlm_settings.api_key)
+        self.vlm_api_key_edit.setPlaceholderText("Optional, e.g. for a hosted API")
+        self.vlm_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        vlm_layout.addRow("API key:", self.vlm_api_key_edit)
+        self.settings_layout.addWidget(vlm_group)
         self.settings_layout.addStretch(1)
 
         self.pending_layout = QVBoxLayout(self.pending_tab)
@@ -454,6 +479,10 @@ class MainWindow(QMainWindow):
         self.filename_edit.textEdited.connect(self._on_filename_edited)
         self.workspace_label_edit.textChanged.connect(self._on_workspace_label_changed)
         self.base_dir_edit.editingFinished.connect(self._save_base_directory_setting)
+        self.vlm_enabled_check.toggled.connect(self._save_vlm_settings)
+        self.vlm_api_url_edit.editingFinished.connect(self._save_vlm_settings)
+        self.vlm_model_edit.editingFinished.connect(self._save_vlm_settings)
+        self.vlm_api_key_edit.editingFinished.connect(self._save_vlm_settings)
         self._apply_auto_filename()
         self._refresh_output_directory_display()
         self._refresh_workspace_path_display()
@@ -842,6 +871,16 @@ class MainWindow(QMainWindow):
         self._base_directory = Path(value).expanduser()
         save_base_directory(self._base_directory)
 
+    @Slot()
+    def _save_vlm_settings(self):
+        self._vlm_settings = VlmSettings(
+            enabled=self.vlm_enabled_check.isChecked(),
+            api_url=self.vlm_api_url_edit.text().strip() or DEFAULT_VLM_API_URL,
+            model=self.vlm_model_edit.text().strip() or DEFAULT_VLM_MODEL,
+            api_key=self.vlm_api_key_edit.text().strip(),
+        )
+        save_vlm_settings(self._vlm_settings)
+
     @Slot(str)
     def _on_workspace_label_changed(self, label: str):
         if self._applying_workspace:
@@ -1164,7 +1203,12 @@ class MainWindow(QMainWindow):
             )
         else:
             self._worker = ConversionWorker(
-                sources, output_dir, fmt_info, custom_filename, source_formats
+                sources,
+                output_dir,
+                fmt_info,
+                custom_filename,
+                source_formats,
+                self._vlm_settings,
             )
         self._worker.progress.connect(self._on_progress)
         self._worker.result_ready.connect(self._on_finished)
