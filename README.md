@@ -131,6 +131,10 @@ external pages remain absolute web URLs.
   `~/.docling-converter/workspaces` and can be changed on **Settings**.
 - Docling may download model data on first use, which can take time and
   requires internet access.
+- Picture description requires the configured endpoint (a local Ollama server
+  by default) to already be running with the model pulled. If the endpoint is
+  unreachable, conversion still succeeds — pictures are just left without a
+  caption, with no error surfaced in the results table.
 - Large PDFs are chunked before conversion when they exceed the configured page
   count or size thresholds.
 - Conversion runs in a background thread so the GUI remains responsive.

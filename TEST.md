@@ -37,6 +37,7 @@ Automated coverage currently includes:
   - workspace label slugging and workspace filename resolution
 - `test_app_settings.py`
   - application base-directory persistence
+  - VLM picture-description settings defaults and round-tripping
 - `test_wiki_urls.py`
   - URL canonicalization, root/scope rules, sub-wiki traversal, safe flattened
     filenames, and deterministic collisions
@@ -60,6 +61,7 @@ Automated coverage currently includes:
   - output filename UX
   - validation error handling
   - worker cleanup behavior on close
+  - `_build_document_converter` VLM format-options wiring (enabled/disabled)
 
 ## Not Covered by Unit Tests
 

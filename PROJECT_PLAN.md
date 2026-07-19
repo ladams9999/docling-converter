@@ -81,7 +81,8 @@ it can be broken into a concrete, individually pickable task.
 
 ### User Interface
 
-- **Settings** controls the workspace base directory and default export format.
+- **Settings** controls the workspace base directory, default export format,
+  and VLM picture-description configuration (endpoint, model, API key).
 - **Workspace** controls workspace creation, labels, files, sources, per-file
   formats, planned outputs, and target directory.
 - **Pending** supports files, directories, single URLs, wiki discovery, queue
@@ -92,8 +93,13 @@ it can be broken into a concrete, individually pickable task.
 
 - Local files, supported directory contents, and individual HTTP/HTTPS URLs can
   be queued.
+- Input formats include PDF, DOCX, PPTX, XLSX, HTML, images, LaTeX, Markdown,
+  EPUB, and plain text.
 - Markdown, HTML, JSON, and DocTags are supported for ordinary sources.
 - Large PDFs are split for conversion and recombined into one output.
+- Optional VLM-based picture description can caption pictures in PDF/image
+  sources during conversion (any OpenAI-compatible endpoint, defaulting to a
+  local Ollama server).
 
 ### Wiki Import
 

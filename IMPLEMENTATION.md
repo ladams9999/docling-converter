@@ -106,7 +106,9 @@ The worker performs document conversion without blocking the UI thread.
 
 Key responsibilities:
 
-- importing `DocumentConverter` inside the worker thread
+- building a `DocumentConverter` inside the worker thread via
+  `_build_document_converter(vlm_settings)`, which wires in VLM picture
+  description when enabled
 - iterating over resolved sources
 - chunking oversized PDFs before conversion when needed
 - exporting each result to the requested format
@@ -198,6 +200,7 @@ Ordinary document conversion logic lives in `conversion_logic.py`, including:
 - `_export_document(doc, key)`
 - `_extract_html_body(html)`, `_merge_json_values(...)`,
   `_combine_chunk_contents(...)`
+- `_build_document_converter(vlm_settings)`
 
 ## Supported Formats
 
@@ -243,6 +246,7 @@ The main window now uses top-level tabs:
 1. **Settings**
    - persistent workspace base directory
    - default export format selector
+   - picture description (VLM) toggle, API URL, model, and API key fields
 2. **Workspace**
    - changeable label and workspace file display
    - **New workspace...**, **Load workspace...**, and **Save workspace...**
