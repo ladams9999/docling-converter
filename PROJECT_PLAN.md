@@ -35,11 +35,37 @@ Markdown and HTML export.
 
 - Keep the documentation set aligned with the actual code and tests.
 - Strengthen confidence around desktop-specific flows that remain outside the
-  current unit-test surface.
+  current unit-test surface — ongoing, tracked as a living checklist in
+  `test-coverage-plan.md`.
 - Validate generic discovery against representative real-world wiki-like sites.
-- Evaluate authenticated/private wiki support and additional wiki export formats
-  only after their security and output semantics are designed.
 - Improve contributor guidance so future work can be picked up quickly.
+
+## Upcoming Goals
+
+Larger or gated directions that are valid but not yet small/pickable work.
+Promote an item to `PENDING_TASKS.md` once its prerequisites are resolved and
+it can be broken into a concrete, individually pickable task.
+
+- **Packaging and distribution.** Document, and eventually automate, building
+  and releasing Docling Converter for non-developer desktop users. No
+  distribution mechanism (installer, code signing, PyInstaller/equivalent)
+  exists yet — revisit once there's an actual need to hand this app to someone
+  outside a dev environment.
+- **Authenticated/private wiki support** (`wiki-plan.md` Q6). Gated on
+  designing credential storage and private-network access policy first; the
+  crawler currently blocks localhost/private-network targets by default and
+  only supports unauthenticated public sites.
+- **JSON and DocTags wiki export** (`wiki-plan.md` Q9). Wiki batches currently
+  support Markdown and HTML only; JSON/DocTags need their own link/output
+  rewriting semantics defined before they're added.
+- **Site-specific wiki adapters** (`wiki-plan.md` Q3). Only worth building if
+  generic path/link-based traversal proves insufficient against a real site —
+  no evidence of that yet.
+- **Extract `main.py` into focused modules.** Currently a single ~1,260-line
+  file; wiki-specific logic has already been split out into `wiki_ui.py`,
+  `wiki_conversion.py`, `wiki_discovery.py`, etc. Revisit once further growth
+  (or a specific maintenance pain point) makes the remaining single-file
+  structure genuinely costly to work in — not a fixed line-count trigger.
 
 ## Current Application State
 

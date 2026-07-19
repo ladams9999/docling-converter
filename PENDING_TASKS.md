@@ -4,14 +4,14 @@ Tasks below are intentionally small and individually pickable.
 
 ---
 
-- Extract `main.py` into focused modules once the current single-file structure
-  becomes too costly to maintain.
-- Expand coverage beyond the current unit tests for drag-and-drop behavior,
-  native dialogs, and full interactive GUI flows.
-- Add packaging and release documentation for distributing Docling Converter to
-  non-developer desktop users.
-- Add authenticated/private wiki support only after credential storage and
-  private-network policy are designed.
-- Extend wiki batches to JSON and DocTags with explicit link/output semantics.
-- Add site-specific wiki adapters if generic path/link traversal proves
-  insufficient.
+Nothing currently pending here.
+
+- See `PROJECT_PLAN.md`'s **Upcoming Goals** for larger, gated, or
+  not-yet-scheduled directions (packaging/distribution, authenticated/private
+  wiki support, wiki JSON/DocTags export, site-specific wiki adapters,
+  extracting `main.py`) — promote an item here once it's unblocked and small
+  enough to pick up directly.
+- See `test-coverage-plan.md` for the ongoing expansion of GUI/interactive
+  test coverage (drag-and-drop, native dialogs, multi-step flows) — tracked
+  there as a living checklist rather than here, since it's continuous rather
+  than a single pickable item.
