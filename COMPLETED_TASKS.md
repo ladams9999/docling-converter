@@ -51,3 +51,13 @@
   confirmation.
 - Added focused automated coverage for wiki URL rules, discovery, redirects,
   cache integrity, assets, provenance, conversion, and queue integration.
+- Added EPUB (`.epub`) and plain text (`.txt`) input support by upgrading the
+  `docling` dependency to a version with native backends for both, and wired
+  the new extensions into the supported-formats list and file picker filter.
+- Verified the existing per-source JSON export plumbing produces a full,
+  structurally faithful `DoclingDocument` for ordinary files, not a stub.
+- Added optional VLM-based picture description for PDF/image sources: a
+  Settings-tab toggle plus provider-agnostic endpoint/model/API-key
+  configuration (defaulting to a local Ollama server), and filtered
+  docling's own internal deprecation warnings so a successful captioned
+  conversion doesn't show as a false "Warning".
