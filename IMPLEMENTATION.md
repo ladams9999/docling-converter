@@ -32,7 +32,7 @@ The application follows a standard `src` layout: importable code lives under
 | `src/docling_converter/workspace_persistence.py` | Versioned workspace save/load helpers |
 | `src/docling_converter/workspace_paths.py` | Default home-based workspace path helpers |
 | `src/docling_converter/workspace_ui.py` | New Workspace dialog and path resolution |
-| `src/docling_converter/app_settings.py` | Application-scoped base-directory persistence |
+| `src/docling_converter/app_settings.py` | Application-scoped base-directory and VLM picture-description settings persistence |
 | `src/docling_converter/wiki_model.py` | Serializable wiki page, import, asset, and provenance models |
 | `src/docling_converter/wiki_urls.py` | URL canonicalization, scope, and flattened filename rules |
 | `src/docling_converter/wiki_discovery.py` | Background wiki crawler and snapshot/asset cache |
@@ -223,6 +223,18 @@ Ordinary document conversion logic lives in `conversion_logic.py`, including:
 
 Wiki batches currently allow only Markdown and HTML. JSON and DocTags remain
 available for ordinary files and single URLs.
+
+## Picture Description (VLM)
+
+`_build_document_converter(vlm_settings)` in `conversion_logic.py` wires
+docling's `PictureDescriptionApiOptions` into the PDF/image pipelines when
+enabled in Settings (`app_settings.VlmSettings`). It targets any
+OpenAI-compatible chat-completions endpoint (`api_url`/`model`/`api_key`),
+defaulting to a local Ollama server running `granite3.2-vision:2b` — no
+docling-side code changes are needed to switch models or providers, only the
+Settings fields. Disabled by default; other formats (DOCX, HTML, etc.) are
+unaffected regardless of this setting since they don't go through the
+picture-detecting PDF/image pipelines.
 
 ## UI Layout
 

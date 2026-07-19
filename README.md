@@ -48,6 +48,20 @@ uv run docling-converter
    on the Pending tab.
 8. Review completed items on the **Converted** tab.
 
+## Picture Description (VLM)
+
+On **Settings**, enable "Describe pictures during conversion" to have a
+vision-language model caption pictures found in PDF and image sources during
+conversion. Configure any OpenAI-compatible chat-completions endpoint:
+
+- **API URL** — defaults to a local Ollama server
+  (`http://localhost:11434/v1/chat/completions`).
+- **Model** — the model tag to request (defaults to `granite3.2-vision:2b`;
+  any vision-capable Ollama model works, e.g. `qwen2.5vl`, `llava`).
+- **API key** — optional, only needed for a hosted API that requires one.
+
+Switching providers/models is a Settings change, not a code change.
+
 The workspace queue drives conversion. When a queued item converts
 successfully, it moves into the converted history and is removed from the
 pending list. When a conversion finishes with a valid output directory,
