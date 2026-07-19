@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from wiki_discovery import FetchResponse, WikiCrawler
-from wiki_urls import canonicalize_url
+from docling_converter.wiki_discovery import FetchResponse, WikiCrawler
+from docling_converter.wiki_urls import canonicalize_url
 
 
 class FakeFetcher:

@@ -22,8 +22,8 @@ from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
 from PySide6.QtCore import QThread, Signal
 
-from wiki_model import WikiAsset, WikiImport, WikiPage
-from wiki_urls import (
+from docling_converter.wiki_model import WikiAsset, WikiImport, WikiPage
+from docling_converter.wiki_urls import (
     canonicalize_url,
     flattened_output_filename,
     is_within_root,
@@ -32,7 +32,7 @@ from wiki_urls import (
     resolve_url,
     should_follow_subwiki_link,
 )
-from workspace_paths import get_wiki_cache_directory
+from docling_converter.workspace_paths import get_wiki_cache_directory
 
 USER_AGENT = "docling-converter/0.1 wiki-import"
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024

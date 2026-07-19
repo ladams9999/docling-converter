@@ -9,10 +9,10 @@ from PySide6.QtWidgets import QApplication
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import main
-from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
-from workspace_persistence import save_workspace
-from wiki_model import WikiImport, WikiPage
+from docling_converter import main
+from docling_converter.workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from docling_converter.workspace_persistence import save_workspace
+from docling_converter.wiki_model import WikiImport, WikiPage
 
 
 @pytest.fixture(scope="session")

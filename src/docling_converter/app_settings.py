@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
-from workspace_paths import get_default_base_directory
+from docling_converter.workspace_paths import get_default_base_directory
 
 ORGANIZATION_NAME = "docling-converter"
 APPLICATION_NAME = "docling-converter"

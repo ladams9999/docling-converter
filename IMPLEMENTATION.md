@@ -10,7 +10,9 @@ All commands below assume the current working directory is the
 uv sync
 
 # Run the application
-uv run python main.py
+uv run docling-converter
+# or
+uv run python -m docling_converter
 ```
 
 - Python is pinned to **3.12** in `.python-version`.
@@ -19,30 +21,33 @@ uv run python main.py
 
 ## Project Structure
 
+The application follows a standard `src` layout: importable code lives under
+`src/docling_converter/`, and tests live under `tests/`.
+
 | File | Purpose |
 |------|---------|
-| `main.py` | PySide6 application entry point and top-level tab orchestration |
-| `conversion_logic.py` | Conversion worker, export helpers, source resolution, and PDF chunking logic |
-| `workspace_model.py` | Serializable workspace state models |
-| `workspace_persistence.py` | Versioned workspace save/load helpers |
-| `workspace_paths.py` | Default home-based workspace path helpers |
-| `workspace_ui.py` | New Workspace dialog and path resolution |
-| `app_settings.py` | Application-scoped base-directory persistence |
-| `wiki_model.py` | Serializable wiki page, import, asset, and provenance models |
-| `wiki_urls.py` | URL canonicalization, scope, and flattened filename rules |
-| `wiki_discovery.py` | Background wiki crawler and snapshot/asset cache |
-| `wiki_conversion.py` | Cached wiki batch conversion and link rewriting |
-| `wiki_ui.py` | Add Wiki dialog |
-| `test_main.py` | UI-level tests for tabs, queue state, conversion flow, and shared progress |
-| `test_workspace_model.py` | Workspace model tests |
-| `test_workspace_persistence.py` | Workspace persistence tests |
-| `test_workspace_paths.py` | Default workspace path tests |
-| `test_workspace_ui.py` | Workspace creation helper tests |
-| `test_app_settings.py` | Application settings tests |
-| `test_wiki_urls.py` | URL, scope, and output filename tests |
-| `test_wiki_discovery.py` | Crawl, redirect, cache, and asset tests |
-| `test_wiki_conversion.py` | Provenance, link rewrite, and batch conversion tests |
-| `pyproject.toml` | Project metadata and dependencies |
+| `src/docling_converter/main.py` | PySide6 application entry point and top-level tab orchestration |
+| `src/docling_converter/conversion_logic.py` | Conversion worker, export helpers, source resolution, and PDF chunking logic |
+| `src/docling_converter/workspace_model.py` | Serializable workspace state models |
+| `src/docling_converter/workspace_persistence.py` | Versioned workspace save/load helpers |
+| `src/docling_converter/workspace_paths.py` | Default home-based workspace path helpers |
+| `src/docling_converter/workspace_ui.py` | New Workspace dialog and path resolution |
+| `src/docling_converter/app_settings.py` | Application-scoped base-directory persistence |
+| `src/docling_converter/wiki_model.py` | Serializable wiki page, import, asset, and provenance models |
+| `src/docling_converter/wiki_urls.py` | URL canonicalization, scope, and flattened filename rules |
+| `src/docling_converter/wiki_discovery.py` | Background wiki crawler and snapshot/asset cache |
+| `src/docling_converter/wiki_conversion.py` | Cached wiki batch conversion and link rewriting |
+| `src/docling_converter/wiki_ui.py` | Add Wiki dialog |
+| `tests/test_main.py` | UI-level tests for tabs, queue state, conversion flow, and shared progress |
+| `tests/test_workspace_model.py` | Workspace model tests |
+| `tests/test_workspace_persistence.py` | Workspace persistence tests |
+| `tests/test_workspace_paths.py` | Default workspace path tests |
+| `tests/test_workspace_ui.py` | Workspace creation helper tests |
+| `tests/test_app_settings.py` | Application settings tests |
+| `tests/test_wiki_urls.py` | URL, scope, and output filename tests |
+| `tests/test_wiki_discovery.py` | Crawl, redirect, cache, and asset tests |
+| `tests/test_wiki_conversion.py` | Provenance, link rewrite, and batch conversion tests |
+| `pyproject.toml` | Project metadata, dependencies, and hatchling build config |
 | `README.md` | Human-facing documentation |
 | `IMPLEMENTATION.md` | Detailed architecture and behavior notes |
 | `TEST.md` | Test commands, coverage summary, and manual smoke checks |

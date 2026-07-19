@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
-from workspace_persistence import (
+from docling_converter.workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from docling_converter.workspace_persistence import (
     WORKSPACE_FILE_VERSION,
     load_workspace,
     save_workspace,

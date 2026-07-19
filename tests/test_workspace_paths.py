@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from workspace_paths import (
+from docling_converter.workspace_paths import (
     APP_HOME_DIRNAME,
     DEFAULT_OUTPUT_DIRNAME,
     DEFAULT_WORKSPACES_DIRNAME,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from workspace_ui import resolve_workspace_file, workspace_slug
+from docling_converter.workspace_ui import resolve_workspace_file, workspace_slug
 
 
 def test_workspace_slug_is_filename_safe():

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from wiki_urls import canonicalize_url, infer_wiki_root
+from docling_converter.wiki_urls import canonicalize_url, infer_wiki_root
 
 
 class WikiImportDialog(QDialog):

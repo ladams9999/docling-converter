@@ -2,14 +2,14 @@ import hashlib
 import sys
 import types
 
-from wiki_conversion import (
+from docling_converter.wiki_conversion import (
     WikiConversionWorker,
     add_html_provenance,
     add_markdown_provenance,
     planned_wiki_conflicts,
     rewrite_markdown_links,
 )
-from wiki_model import WikiAsset, WikiImport, WikiPage
+from docling_converter.wiki_model import WikiAsset, WikiImport, WikiPage
 
 
 def test_markdown_provenance_is_first_and_safely_quoted():
@@ -132,7 +132,7 @@ def test_wiki_worker_converts_cached_pages_with_links_and_provenance(
     monkeypatch.setitem(sys.modules, "docling", docling_module)
     monkeypatch.setitem(sys.modules, "docling.document_converter", converter_module)
     monkeypatch.setattr(
-        "wiki_conversion.get_wiki_cache_directory",
+        "docling_converter.wiki_conversion.get_wiki_cache_directory",
         lambda _import_id: tmp_path / "cache",
     )
     output_dir = tmp_path / "output"
@@ -184,7 +184,7 @@ def test_wiki_worker_supports_per_page_formats(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "docling", docling_module)
     monkeypatch.setitem(sys.modules, "docling.document_converter", converter_module)
     monkeypatch.setattr(
-        "wiki_conversion.get_wiki_cache_directory",
+        "docling_converter.wiki_conversion.get_wiki_cache_directory",
         lambda _import_id: tmp_path / "cache",
     )
     output_dir = tmp_path / "output"
