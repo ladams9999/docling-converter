@@ -94,6 +94,8 @@ external pages remain absolute web URLs.
 | Images | `.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp` |
 | LaTeX | `.tex` |
 | Markdown | `.md` |
+| EPUB | `.epub` |
+| Plain text | `.txt` |
 
 ### Output
 

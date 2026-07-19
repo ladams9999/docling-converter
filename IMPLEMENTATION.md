@@ -211,6 +211,8 @@ Ordinary document conversion logic lives in `conversion_logic.py`, including:
 - Images (`.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`)
 - LaTeX
 - Markdown
+- EPUB (`.epub`)
+- Plain text (`.txt`)
 
 ### Output
 
