@@ -312,8 +312,13 @@ def _install_fake_docling_format_options(monkeypatch):
     converter_module.PdfFormatOption = _FakeFormatOption
     converter_module.ImageFormatOption = _FakeFormatOption
 
-    monkeypatch.setitem(sys.modules, "docling", types.ModuleType("docling"))
-    monkeypatch.setitem(sys.modules, "docling.datamodel", types.ModuleType("docling.datamodel"))
+    docling_module = types.ModuleType("docling")
+    docling_module.__path__ = []
+    datamodel_module = types.ModuleType("docling.datamodel")
+    datamodel_module.__path__ = []
+
+    monkeypatch.setitem(sys.modules, "docling", docling_module)
+    monkeypatch.setitem(sys.modules, "docling.datamodel", datamodel_module)
     monkeypatch.setitem(sys.modules, "docling.datamodel.base_models", base_models_module)
     monkeypatch.setitem(
         sys.modules, "docling.datamodel.pipeline_options", pipeline_options_module

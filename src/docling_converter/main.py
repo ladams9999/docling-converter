@@ -877,7 +877,7 @@ class MainWindow(QMainWindow):
             enabled=self.vlm_enabled_check.isChecked(),
             api_url=self.vlm_api_url_edit.text().strip() or DEFAULT_VLM_API_URL,
             model=self.vlm_model_edit.text().strip() or DEFAULT_VLM_MODEL,
-            api_key=self.vlm_api_key_edit.text(),
+            api_key=self.vlm_api_key_edit.text().strip(),
         )
         save_vlm_settings(self._vlm_settings)
 

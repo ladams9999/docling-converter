@@ -56,7 +56,7 @@ def load_vlm_settings(settings: QSettings | None = None) -> VlmSettings:
         or DEFAULT_VLM_API_URL,
         model=str(store.value(VLM_MODEL_KEY, DEFAULT_VLM_MODEL)).strip()
         or DEFAULT_VLM_MODEL,
-        api_key=str(store.value(VLM_API_KEY_KEY, "")),
+        api_key=str(store.value(VLM_API_KEY_KEY, "")).strip(),
     )
 
 

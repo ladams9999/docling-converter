@@ -59,6 +59,9 @@ conversion. Configure any OpenAI-compatible chat-completions endpoint:
 - **Model** — the model tag to request (defaults to `granite3.2-vision:2b`;
   any vision-capable Ollama model works, e.g. `qwen2.5vl`, `llava`).
 - **API key** — optional, only needed for a hosted API that requires one.
+  Stored in plaintext via Qt's `QSettings` (an INI file or the registry,
+  depending on platform) — avoid entering a long-lived key here on a shared
+  machine.
 
 Switching providers/models is a Settings change, not a code change.
 
