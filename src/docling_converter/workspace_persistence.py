@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from workspace_model import WorkspaceData
+from docling_converter.workspace_model import WorkspaceData
 
 WORKSPACE_FILE_VERSION = 3
 

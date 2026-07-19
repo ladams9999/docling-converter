@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from wiki_urls import (
+from docling_converter.wiki_urls import (
     SubWikiLinkKind,
     canonicalize_url,
     classify_subwiki_link,

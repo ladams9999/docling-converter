@@ -25,7 +25,7 @@ uv sync
 ## Run the Application
 
 ```bash
-uv run python main.py
+uv run docling-converter
 ```
 
 ## How to Use It

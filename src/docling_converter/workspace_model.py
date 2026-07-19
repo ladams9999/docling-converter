@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from wiki_model import WikiImport, WikiPage
+from docling_converter.wiki_model import WikiImport, WikiPage
 
 
 @dataclass(slots=True)

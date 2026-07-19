@@ -2,7 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
-from app_settings import load_base_directory, save_base_directory
+from docling_converter.app_settings import load_base_directory, save_base_directory
 
 
 def test_base_directory_round_trip(tmp_path):

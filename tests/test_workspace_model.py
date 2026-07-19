@@ -1,5 +1,5 @@
-from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
-from wiki_model import WikiAsset, WikiImport, WikiPage
+from docling_converter.workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from docling_converter.wiki_model import WikiAsset, WikiImport, WikiPage
 
 
 def test_workspace_data_defaults_are_ui_safe():

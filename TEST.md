@@ -78,7 +78,7 @@ The following still need manual verification:
 Run the app:
 
 ```bash
-uv run python main.py
+uv run docling-converter
 ```
 
 Verify these behaviors interactively:

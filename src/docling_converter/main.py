@@ -28,12 +28,12 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from app_settings import (
+from docling_converter.app_settings import (
     load_base_directory,
     save_base_directory,
 )
-import conversion_logic as _conversion_logic
-from conversion_logic import (
+import docling_converter.conversion_logic as _conversion_logic
+from docling_converter.conversion_logic import (
     FILE_FILTER,
     FORMAT_OPTIONS,
     _combine_chunk_contents,
@@ -55,14 +55,14 @@ from conversion_logic import (
     _should_chunk_pdf,
     _split_pdf_into_chunks,
 )
-from workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
-from workspace_paths import get_default_workspace_file
-from workspace_persistence import load_workspace, save_workspace
-from workspace_ui import NewWorkspaceDialog
-from wiki_conversion import WikiConversionWorker, planned_wiki_conflicts
-from wiki_discovery import WikiDiscoveryWorker
-from wiki_ui import WikiImportDialog
-from wiki_urls import canonicalize_url
+from docling_converter.workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from docling_converter.workspace_paths import get_default_workspace_file
+from docling_converter.workspace_persistence import load_workspace, save_workspace
+from docling_converter.workspace_ui import NewWorkspaceDialog
+from docling_converter.wiki_conversion import WikiConversionWorker, planned_wiki_conflicts
+from docling_converter.wiki_discovery import WikiDiscoveryWorker
+from docling_converter.wiki_ui import WikiImportDialog
+from docling_converter.wiki_urls import canonicalize_url
 
 
 def _sync_conversion_logic_bindings():

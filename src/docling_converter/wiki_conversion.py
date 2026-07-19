@@ -15,15 +15,15 @@ from urllib.parse import urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 from PySide6.QtCore import QThread, Signal
 
-from conversion_logic import (
+from docling_converter.conversion_logic import (
     FORMAT_OPTIONS,
     ConversionWorker,
     _export_document,
     _severity_icon,
 )
-from wiki_model import WikiAsset, WikiImport, WikiPage
-from wiki_urls import canonicalize_url, plan_output_filenames
-from workspace_paths import get_wiki_cache_directory
+from docling_converter.wiki_model import WikiAsset, WikiImport, WikiPage
+from docling_converter.wiki_urls import canonicalize_url, plan_output_filenames
+from docling_converter.workspace_paths import get_wiki_cache_directory
 
 
 def add_markdown_provenance(
