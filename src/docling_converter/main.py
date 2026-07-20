@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QUrl, Qt, Slot
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QColor, QDesktopServices, QFont
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView,
@@ -30,13 +30,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from docling_converter.app_settings import (
-    DEFAULT_VLM_API_URL,
-    DEFAULT_VLM_MODEL,
-    VlmSettings,
     load_base_directory,
-    load_vlm_settings,
     save_base_directory,
-    save_vlm_settings,
 )
 import docling_converter.conversion_logic as _conversion_logic
 from docling_converter.conversion_logic import (
@@ -61,7 +56,14 @@ from docling_converter.conversion_logic import (
     _should_chunk_pdf,
     _split_pdf_into_chunks,
 )
-from docling_converter.workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from docling_converter.workspace_model import (
+    DEFAULT_VLM_API_URL,
+    DEFAULT_VLM_MODEL,
+    ConvertedItem,
+    VlmSettings,
+    WorkspaceData,
+    WorkspaceSettings,
+)
 from docling_converter.workspace_paths import get_default_workspace_file
 from docling_converter.workspace_persistence import load_workspace, save_workspace
 from docling_converter.workspace_ui import NewWorkspaceDialog
@@ -155,8 +157,8 @@ class MainWindow(QMainWindow):
         self._updating_filename = False
         self._applying_workspace = False
         self._last_output_dir: Path | None = None
+        self._last_run_sources: set[str] = set()
         self._base_directory = load_base_directory()
-        self._vlm_settings = load_vlm_settings()
         self._workspace_path = get_default_workspace_file()
         self._workspace = WorkspaceData()
         self._build_ui()
@@ -179,6 +181,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.pending_tab, "Pending")
         self.tabs.addTab(self.converted_tab, "Converted")
 
+        # --- Settings tab: app-scoped settings only ---
         self.settings_layout = QVBoxLayout(self.settings_tab)
         base_group = QGroupBox("Workspace base directory")
         base_layout = QHBoxLayout(base_group)
@@ -188,130 +191,9 @@ class MainWindow(QMainWindow):
         self.base_dir_browse_btn.clicked.connect(self._browse_base_directory)
         base_layout.addWidget(self.base_dir_browse_btn)
         self.settings_layout.addWidget(base_group)
-
-        default_format_group = QGroupBox("Default export format")
-        default_format_layout = QVBoxLayout(default_format_group)
-        self.format_combo = QComboBox()
-        self.format_combo.addItems(list(FORMAT_OPTIONS.keys()))
-        self.format_combo.setCurrentText(self._workspace.settings.format_label)
-        default_format_layout.addWidget(self.format_combo)
-        self.settings_layout.addWidget(default_format_group)
-
-        vlm_group = QGroupBox("Picture description (VLM)")
-        vlm_layout = QFormLayout(vlm_group)
-        self.vlm_enabled_check = QCheckBox("Describe pictures during conversion")
-        self.vlm_enabled_check.setChecked(self._vlm_settings.enabled)
-        vlm_layout.addRow(self.vlm_enabled_check)
-        self.vlm_api_url_edit = QLineEdit(self._vlm_settings.api_url)
-        self.vlm_api_url_edit.setPlaceholderText(
-            "OpenAI-compatible chat-completions endpoint, e.g. local Ollama"
-        )
-        vlm_layout.addRow("API URL:", self.vlm_api_url_edit)
-        self.vlm_model_edit = QLineEdit(self._vlm_settings.model)
-        vlm_layout.addRow("Model:", self.vlm_model_edit)
-        self.vlm_api_key_edit = QLineEdit(self._vlm_settings.api_key)
-        self.vlm_api_key_edit.setPlaceholderText("Optional, e.g. for a hosted API")
-        self.vlm_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        vlm_layout.addRow("API key:", self.vlm_api_key_edit)
-        self.settings_layout.addWidget(vlm_group)
         self.settings_layout.addStretch(1)
 
-        self.pending_layout = QVBoxLayout(self.pending_tab)
-        pending_progress_group = QGroupBox("Processing")
-        pending_progress_layout = QVBoxLayout(pending_progress_group)
-        self.pending_status_label = QLabel("")
-        pending_progress_layout.addWidget(self.pending_status_label)
-        self.pending_progress_bar = QProgressBar()
-        self.pending_progress_bar.setRange(0, 0)
-        self.pending_progress_bar.setVisible(False)
-        pending_progress_layout.addWidget(self.pending_progress_bar)
-        self.pending_layout.addWidget(pending_progress_group)
-
-        pending_controls_layout = QHBoxLayout()
-
-        self.pending_add_files_btn = QPushButton("Add files...")
-        self.pending_add_files_btn.clicked.connect(self._add_pending_files_from_dialog)
-        pending_controls_layout.addWidget(self.pending_add_files_btn)
-
-        self.pending_add_directory_btn = QPushButton("Add directory...")
-        self.pending_add_directory_btn.clicked.connect(
-            self._add_pending_directory_from_dialog
-        )
-        pending_controls_layout.addWidget(self.pending_add_directory_btn)
-
-        self.pending_url_edit = QLineEdit()
-        self.pending_url_edit.setPlaceholderText("https://example.com/page")
-        pending_controls_layout.addWidget(self.pending_url_edit, stretch=1)
-
-        self.pending_add_url_btn = QPushButton("Add URL")
-        self.pending_add_url_btn.clicked.connect(self._add_pending_url)
-        pending_controls_layout.addWidget(self.pending_add_url_btn)
-
-        self.pending_add_wiki_btn = QPushButton("Add wiki...")
-        self.pending_add_wiki_btn.clicked.connect(self._add_pending_wiki)
-        pending_controls_layout.addWidget(self.pending_add_wiki_btn)
-        self.pending_layout.addLayout(pending_controls_layout)
-
-        self.pending_list = QListWidget()
-        self.pending_layout.addWidget(self.pending_list, stretch=1)
-
-        pending_actions_layout = QHBoxLayout()
-        self.pending_convert_btn = QPushButton("Convert pending")
-        self.pending_convert_btn.clicked.connect(self._start_conversion)
-        pending_actions_layout.addWidget(self.pending_convert_btn)
-
-        self.pending_remove_btn = QPushButton("Remove selected")
-        self.pending_remove_btn.clicked.connect(self._remove_selected_pending_sources)
-        pending_actions_layout.addWidget(self.pending_remove_btn)
-
-        self.pending_clear_btn = QPushButton("Clear pending")
-        self.pending_clear_btn.clicked.connect(self._clear_pending_sources)
-        pending_actions_layout.addWidget(self.pending_clear_btn)
-
-        self.pending_cancel_discovery_btn = QPushButton("Cancel discovery")
-        self.pending_cancel_discovery_btn.clicked.connect(self._cancel_wiki_discovery)
-        self.pending_cancel_discovery_btn.setVisible(False)
-        pending_actions_layout.addWidget(self.pending_cancel_discovery_btn)
-        pending_actions_layout.addStretch(1)
-        self.pending_layout.addLayout(pending_actions_layout)
-
-        self.converted_layout = QVBoxLayout(self.converted_tab)
-        converted_progress_group = QGroupBox("Processing")
-        converted_progress_layout = QVBoxLayout(converted_progress_group)
-        self.converted_status_label = QLabel("")
-        converted_progress_layout.addWidget(self.converted_status_label)
-        self.converted_progress_bar = QProgressBar()
-        self.converted_progress_bar.setRange(0, 0)
-        self.converted_progress_bar.setVisible(False)
-        converted_progress_layout.addWidget(self.converted_progress_bar)
-        self.converted_layout.addWidget(converted_progress_group)
-
-        self.converted_table = QTableWidget(0, 3)
-        self.converted_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
-        self.converted_table.verticalHeader().setVisible(False)
-        self.converted_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.converted_table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
-        self.converted_table.setSelectionMode(
-            QAbstractItemView.SelectionMode.SingleSelection
-        )
-        self.converted_table.setAlternatingRowColors(True)
-        self.converted_table.setWordWrap(False)
-        self.converted_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
-        self.converted_table.setHorizontalScrollMode(
-            QAbstractItemView.ScrollMode.ScrollPerPixel
-        )
-        self.converted_table.setMinimumHeight(160)
-        converted_header = self.converted_table.horizontalHeader()
-        converted_header.setStretchLastSection(False)
-        converted_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        converted_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        converted_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.converted_table.setColumnWidth(0, 110)
-        self.converted_table.setColumnWidth(2, 220)
-        self.converted_layout.addWidget(self.converted_table, stretch=1)
-
+        # --- Workspace tab: workspace identity + everything in WorkspaceSettings ---
         layout = QVBoxLayout(self.workspace_tab)
 
         workspace_actions_group = QGroupBox("Workspace file")
@@ -339,6 +221,56 @@ class MainWindow(QMainWindow):
         identity_layout.addRow("Label:", self.workspace_label_edit)
         layout.addWidget(identity_group)
 
+        default_format_group = QGroupBox("Default export format")
+        default_format_layout = QVBoxLayout(default_format_group)
+        self.format_combo = QComboBox()
+        self.format_combo.addItems(list(FORMAT_OPTIONS.keys()))
+        self.format_combo.setCurrentText(self._workspace.settings.format_label)
+        default_format_layout.addWidget(self.format_combo)
+        layout.addWidget(default_format_group)
+
+        vlm_group = QGroupBox("Picture description (VLM)")
+        vlm_layout = QFormLayout(vlm_group)
+        self.vlm_enabled_check = QCheckBox("Describe pictures during conversion")
+        self.vlm_enabled_check.setChecked(self._workspace.settings.vlm_settings.enabled)
+        vlm_layout.addRow(self.vlm_enabled_check)
+        self.vlm_api_url_edit = QLineEdit(self._workspace.settings.vlm_settings.api_url)
+        self.vlm_api_url_edit.setPlaceholderText(
+            "OpenAI-compatible chat-completions endpoint, e.g. local Ollama"
+        )
+        vlm_layout.addRow("API URL:", self.vlm_api_url_edit)
+        self.vlm_model_edit = QLineEdit(self._workspace.settings.vlm_settings.model)
+        vlm_layout.addRow("Model:", self.vlm_model_edit)
+        self.vlm_api_key_edit = QLineEdit(self._workspace.settings.vlm_settings.api_key)
+        self.vlm_api_key_edit.setPlaceholderText("Optional, e.g. for a hosted API")
+        self.vlm_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        vlm_layout.addRow("API key:", self.vlm_api_key_edit)
+        layout.addWidget(vlm_group)
+
+        fname_group = QGroupBox("Output filename")
+        fname_inner = QVBoxLayout(fname_group)
+        fname_row = QHBoxLayout()
+        self.filename_edit = QLineEdit()
+        fname_row.addWidget(self.filename_edit)
+        self.auto_filename_btn = QPushButton("Auto")
+        self.auto_filename_btn.clicked.connect(self._on_auto_filename_clicked)
+        fname_row.addWidget(self.auto_filename_btn)
+        fname_inner.addLayout(fname_row)
+        layout.addWidget(fname_group)
+        layout.addStretch(1)
+
+        # --- Pending tab: everything about choosing what to convert ---
+        self.pending_layout = QVBoxLayout(self.pending_tab)
+        pending_progress_group = QGroupBox("Processing")
+        pending_progress_layout = QVBoxLayout(pending_progress_group)
+        self.pending_status_label = QLabel("")
+        pending_progress_layout.addWidget(self.pending_status_label)
+        self.pending_progress_bar = QProgressBar()
+        self.pending_progress_bar.setRange(0, 0)
+        self.pending_progress_bar.setVisible(False)
+        pending_progress_layout.addWidget(self.pending_progress_bar)
+        self.pending_layout.addWidget(pending_progress_group)
+
         # --- Input files ---
         input_group = QGroupBox(
             "Input file(s) — paste paths/URLs or drag && drop files"
@@ -353,7 +285,7 @@ class MainWindow(QMainWindow):
             "  C:\\docs\\report.pdf\n"
             "  https://arxiv.org/pdf/2408.09869"
         )
-        self.input_text.setMaximumHeight(120)
+        self.input_text.setMinimumHeight(220)
         input_layout.addWidget(self.input_text)
 
         # Browse and Clear buttons in a horizontal layout
@@ -366,21 +298,85 @@ class MainWindow(QMainWindow):
         self.clear_input_btn.clicked.connect(self._clear_input_files)
         input_btn_layout.addWidget(self.clear_input_btn)
         input_layout.addLayout(input_btn_layout)
+        self.pending_layout.addWidget(input_group)
+
+        pending_controls_layout = QHBoxLayout()
+
+        self.pending_add_files_btn = QPushButton("Add files...")
+        self.pending_add_files_btn.clicked.connect(self._add_pending_files_from_dialog)
+        pending_controls_layout.addWidget(self.pending_add_files_btn)
+
+        self.pending_add_directory_btn = QPushButton("Add directory...")
+        self.pending_add_directory_btn.clicked.connect(
+            self._add_pending_directory_from_dialog
+        )
+        pending_controls_layout.addWidget(self.pending_add_directory_btn)
+
+        self.pending_url_edit = QLineEdit()
+        self.pending_url_edit.setPlaceholderText("https://example.com/page")
+        pending_controls_layout.addWidget(self.pending_url_edit, stretch=1)
+
+        self.pending_add_url_btn = QPushButton("Add URL")
+        self.pending_add_url_btn.clicked.connect(self._add_pending_url)
+        pending_controls_layout.addWidget(self.pending_add_url_btn)
+
+        self.pending_add_wiki_btn = QPushButton("Add wiki...")
+        self.pending_add_wiki_btn.clicked.connect(self._add_pending_wiki)
+        pending_controls_layout.addWidget(self.pending_add_wiki_btn)
+        self.pending_layout.addLayout(pending_controls_layout)
+
         self.input_files_table = QTableWidget(0, 2)
         self.input_files_table.setHorizontalHeaderLabels(["Input file", "Format"])
         self.input_files_table.verticalHeader().setVisible(False)
         self.input_files_table.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
         )
+        self.input_files_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self.input_files_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         input_header = self.input_files_table.horizontalHeader()
         input_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         input_header.setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
         )
-        input_layout.addWidget(self.input_files_table)
-        layout.addWidget(input_group)
+        self.pending_layout.addWidget(self.input_files_table, stretch=1)
 
-        # --- Output directory ---
+        pending_actions_layout = QHBoxLayout()
+        self.pending_convert_btn = QPushButton("Convert pending")
+        self.pending_convert_btn.setMinimumHeight(36)
+        self.pending_convert_btn.clicked.connect(self._start_conversion)
+        pending_actions_layout.addWidget(self.pending_convert_btn)
+
+        self.pending_remove_btn = QPushButton("Remove selected")
+        self.pending_remove_btn.clicked.connect(self._remove_selected_pending_sources)
+        pending_actions_layout.addWidget(self.pending_remove_btn)
+
+        self.pending_clear_btn = QPushButton("Clear pending")
+        self.pending_clear_btn.clicked.connect(self._clear_pending_sources)
+        pending_actions_layout.addWidget(self.pending_clear_btn)
+
+        self.pending_cancel_discovery_btn = QPushButton("Cancel discovery")
+        self.pending_cancel_discovery_btn.clicked.connect(self._cancel_wiki_discovery)
+        self.pending_cancel_discovery_btn.setVisible(False)
+        pending_actions_layout.addWidget(self.pending_cancel_discovery_btn)
+        pending_actions_layout.addStretch(1)
+        self.pending_layout.addLayout(pending_actions_layout)
+
+        # --- Converted tab: where output went + full converted history ---
+        self.converted_layout = QVBoxLayout(self.converted_tab)
+        converted_progress_group = QGroupBox("Processing")
+        converted_progress_layout = QVBoxLayout(converted_progress_group)
+        self.converted_status_label = QLabel("")
+        converted_progress_layout.addWidget(self.converted_status_label)
+        self.converted_progress_bar = QProgressBar()
+        self.converted_progress_bar.setRange(0, 0)
+        self.converted_progress_bar.setVisible(False)
+        converted_progress_layout.addWidget(self.converted_progress_bar)
+        self.converted_layout.addWidget(converted_progress_group)
+
         output_group = QGroupBox("Output directory")
         output_layout = QHBoxLayout(output_group)
 
@@ -391,50 +387,7 @@ class MainWindow(QMainWindow):
         browse_dir_btn = QPushButton("Browse...")
         browse_dir_btn.clicked.connect(self._browse_output_dir)
         output_layout.addWidget(browse_dir_btn)
-        layout.addWidget(output_group)
-
-        # --- Format + filename row ---
-        options_layout = QHBoxLayout()
-
-        fname_group = QGroupBox("Output filename")
-        fname_inner = QVBoxLayout(fname_group)
-        fname_row = QHBoxLayout()
-        self.filename_edit = QLineEdit()
-        fname_row.addWidget(self.filename_edit)
-        self.auto_filename_btn = QPushButton("Auto")
-        self.auto_filename_btn.clicked.connect(self._on_auto_filename_clicked)
-        fname_row.addWidget(self.auto_filename_btn)
-        fname_inner.addLayout(fname_row)
-        options_layout.addWidget(fname_group)
-
-        layout.addLayout(options_layout)
-
-        output_files_group = QGroupBox("Output files")
-        output_files_layout = QVBoxLayout(output_files_group)
-        self.output_files_list = QListWidget()
-        output_files_layout.addWidget(self.output_files_list)
-        layout.addWidget(output_files_group)
-
-        # --- Convert button + progress ---
-        action_layout = QHBoxLayout()
-        self.convert_btn = QPushButton("Convert")
-        self.convert_btn.setMinimumHeight(36)
-        self.convert_btn.clicked.connect(self._start_conversion)
-        action_layout.addWidget(self.convert_btn)
-
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # indeterminate
-        self.progress_bar.setVisible(False)
-        action_layout.addWidget(self.progress_bar)
-        layout.addLayout(action_layout)
-
-        # --- Status label + open folder button ---
-        status_row = QHBoxLayout()
-        self.status_label = QLabel("")
-        status_row.addWidget(self.status_label)
-        status_row.addStretch(1)
-
-        layout.addLayout(status_row)
+        self.converted_layout.addWidget(output_group)
 
         output_dir_row = QHBoxLayout()
         self.output_dir_display_label = QLabel("Output directory: (not set)")
@@ -444,34 +397,40 @@ class MainWindow(QMainWindow):
         self.open_folder_btn.setVisible(False)
         self.open_folder_btn.clicked.connect(self._open_output_folder)
         output_dir_row.addWidget(self.open_folder_btn)
-        layout.addLayout(output_dir_row)
+        self.converted_layout.addLayout(output_dir_row)
 
-        # --- Results table ---
-        self.results_table = QTableWidget(0, 3)
-        self.results_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
-        self.results_table.verticalHeader().setVisible(False)
-        self.results_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.results_table.setSelectionBehavior(
+        output_files_group = QGroupBox("Output files")
+        output_files_layout = QVBoxLayout(output_files_group)
+        self.output_files_list = QListWidget()
+        output_files_layout.addWidget(self.output_files_list)
+        self.converted_layout.addWidget(output_files_group)
+
+        self.converted_table = QTableWidget(0, 3)
+        self.converted_table.setHorizontalHeaderLabels(["Status", "Source", "Target"])
+        self.converted_table.verticalHeader().setVisible(False)
+        self.converted_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.converted_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
-        self.results_table.setSelectionMode(
+        self.converted_table.setSelectionMode(
             QAbstractItemView.SelectionMode.SingleSelection
         )
-        self.results_table.setAlternatingRowColors(True)
-        self.results_table.setWordWrap(False)
-        self.results_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
-        self.results_table.setHorizontalScrollMode(
+        self.converted_table.setAlternatingRowColors(True)
+        self.converted_table.setWordWrap(False)
+        self.converted_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.converted_table.setHorizontalScrollMode(
             QAbstractItemView.ScrollMode.ScrollPerPixel
         )
-        self.results_table.setMinimumHeight(120)
-        header = self.results_table.horizontalHeader()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.results_table.setColumnWidth(0, 110)
-        self.results_table.setColumnWidth(2, 220)
-        layout.addWidget(self.results_table, stretch=1)
+        self.converted_table.setMinimumHeight(160)
+        converted_header = self.converted_table.horizontalHeader()
+        converted_header.setStretchLastSection(False)
+        converted_header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        converted_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        converted_header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.converted_table.setColumnWidth(0, 110)
+        self.converted_table.setColumnWidth(2, 220)
+        self.converted_layout.addWidget(QLabel("Highlighted rows are from the most recent conversion run."))
+        self.converted_layout.addWidget(self.converted_table, stretch=1)
 
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
         self.input_text.textChanged.connect(self._on_sources_changed)
@@ -479,10 +438,10 @@ class MainWindow(QMainWindow):
         self.filename_edit.textEdited.connect(self._on_filename_edited)
         self.workspace_label_edit.textChanged.connect(self._on_workspace_label_changed)
         self.base_dir_edit.editingFinished.connect(self._save_base_directory_setting)
-        self.vlm_enabled_check.toggled.connect(self._save_vlm_settings)
-        self.vlm_api_url_edit.editingFinished.connect(self._save_vlm_settings)
-        self.vlm_model_edit.editingFinished.connect(self._save_vlm_settings)
-        self.vlm_api_key_edit.editingFinished.connect(self._save_vlm_settings)
+        self.vlm_enabled_check.toggled.connect(self._on_vlm_settings_edited)
+        self.vlm_api_url_edit.editingFinished.connect(self._on_vlm_settings_edited)
+        self.vlm_model_edit.editingFinished.connect(self._on_vlm_settings_edited)
+        self.vlm_api_key_edit.editingFinished.connect(self._on_vlm_settings_edited)
         self._apply_auto_filename()
         self._refresh_output_directory_display()
         self._refresh_workspace_path_display()
@@ -499,10 +458,6 @@ class MainWindow(QMainWindow):
         busy: bool = False,
         style: str = "color: palette(text);",
     ):
-        self.status_label.setStyleSheet(style)
-        self.status_label.setText(message)
-        self.progress_bar.setVisible(busy)
-
         for label, bar in (
             (self.pending_status_label, self.pending_progress_bar),
             (self.converted_status_label, self.converted_progress_bar),
@@ -516,6 +471,15 @@ class MainWindow(QMainWindow):
             format_label=self.format_combo.currentText(),
             custom_filename=self.filename_edit.text().strip(),
             auto_filename_enabled=self._auto_filename_enabled,
+            vlm_settings=self._current_vlm_settings(),
+        )
+
+    def _current_vlm_settings(self) -> VlmSettings:
+        return VlmSettings(
+            enabled=self.vlm_enabled_check.isChecked(),
+            api_url=self.vlm_api_url_edit.text().strip() or DEFAULT_VLM_API_URL,
+            model=self.vlm_model_edit.text().strip() or DEFAULT_VLM_MODEL,
+            api_key=self.vlm_api_key_edit.text().strip(),
         )
 
     def _resolved_workspace_sources(self) -> list[str]:
@@ -545,14 +509,9 @@ class MainWindow(QMainWindow):
         }
         self._sync_wiki_inclusion()
         self._workspace.settings = self._current_workspace_settings()
-        self._refresh_pending_list()
         self._refresh_workspace_file_lists()
         self._refresh_converted_table()
         self._refresh_workspace_path_display()
-
-    def _refresh_pending_list(self):
-        self.pending_list.clear()
-        self.pending_list.addItems(self._workspace.pending_sources)
 
     def _refresh_workspace_file_lists(self):
         self.input_files_table.setRowCount(0)
@@ -654,6 +613,14 @@ class MainWindow(QMainWindow):
                 source_item.setToolTip(tooltip)
                 target_item.setToolTip(tooltip)
 
+            if row_data.get("source", "") in self._last_run_sources:
+                highlight_font = QFont()
+                highlight_font.setBold(True)
+                highlight_color = QColor(224, 247, 224)
+                for item in (status_item, source_item, target_item):
+                    item.setFont(highlight_font)
+                    item.setBackground(highlight_color)
+
             self.converted_table.setItem(row_idx, 0, status_item)
             self.converted_table.setItem(row_idx, 1, source_item)
             self.converted_table.setItem(row_idx, 2, target_item)
@@ -710,6 +677,12 @@ class MainWindow(QMainWindow):
 
             self.format_combo.setCurrentText(workspace.settings.format_label)
             self._auto_filename_enabled = workspace.settings.auto_filename_enabled
+
+            vlm_settings = workspace.settings.vlm_settings
+            self.vlm_enabled_check.setChecked(vlm_settings.enabled)
+            self.vlm_api_url_edit.setText(vlm_settings.api_url)
+            self.vlm_model_edit.setText(vlm_settings.model)
+            self.vlm_api_key_edit.setText(vlm_settings.api_key)
 
             if workspace.settings.auto_filename_enabled:
                 self._apply_auto_filename()
@@ -809,31 +782,6 @@ class MainWindow(QMainWindow):
         else:
             self.output_dir_display_label.setText("Output directory: (not set)")
 
-    def _populate_results_table(self, rows: list[dict]):
-        self.results_table.setRowCount(0)
-
-        for row_data in rows:
-            row_idx = self.results_table.rowCount()
-            self.results_table.insertRow(row_idx)
-
-            severity = row_data.get("severity", "success")
-            icon = _severity_icon(severity)
-            label = _severity_label(severity)
-            status_item = QTableWidgetItem(f"{icon} {label}")
-            source_item = QTableWidgetItem(row_data.get("source", ""))
-            target_item = QTableWidgetItem(row_data.get("target", ""))
-
-            messages = row_data.get("messages", [])
-            if messages:
-                tooltip = "\n".join(messages)
-                status_item.setToolTip(tooltip)
-                source_item.setToolTip(tooltip)
-                target_item.setToolTip(tooltip)
-
-            self.results_table.setItem(row_idx, 0, status_item)
-            self.results_table.setItem(row_idx, 1, source_item)
-            self.results_table.setItem(row_idx, 2, target_item)
-
     # --- Slots ---
 
     @Slot()
@@ -872,14 +820,10 @@ class MainWindow(QMainWindow):
         save_base_directory(self._base_directory)
 
     @Slot()
-    def _save_vlm_settings(self):
-        self._vlm_settings = VlmSettings(
-            enabled=self.vlm_enabled_check.isChecked(),
-            api_url=self.vlm_api_url_edit.text().strip() or DEFAULT_VLM_API_URL,
-            model=self.vlm_model_edit.text().strip() or DEFAULT_VLM_MODEL,
-            api_key=self.vlm_api_key_edit.text().strip(),
-        )
-        save_vlm_settings(self._vlm_settings)
+    def _on_vlm_settings_edited(self):
+        if self._applying_workspace:
+            return
+        self._sync_workspace_from_ui()
 
     @Slot(str)
     def _on_workspace_label_changed(self, label: str):
@@ -998,7 +942,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _remove_selected_pending_sources(self):
-        selected_indexes = self.pending_list.selectedIndexes()
+        selected_indexes = self.input_files_table.selectedIndexes()
         if not selected_indexes:
             return
 
@@ -1154,7 +1098,6 @@ class MainWindow(QMainWindow):
                 "Validation errors: " + "; ".join(errors),
                 style="color: red;",
             )
-            self._populate_results_table([])
             return
 
         # Start worker
@@ -1184,11 +1127,9 @@ class MainWindow(QMainWindow):
                     self._set_status_message("Wiki conversion cancelled.")
                     return
 
-        self.convert_btn.setEnabled(False)
         self.pending_convert_btn.setEnabled(False)
         self.clear_input_btn.setEnabled(False)
         self._set_status_message("Starting conversion...", busy=True)
-        self._populate_results_table([])
         self.open_folder_btn.setVisible(False)
 
         assert output_dir is not None  # guaranteed by validation above
@@ -1208,7 +1149,7 @@ class MainWindow(QMainWindow):
                 fmt_info,
                 custom_filename,
                 source_formats,
-                self._vlm_settings,
+                self._workspace.settings.vlm_settings,
             )
         self._worker.progress.connect(self._on_progress)
         self._worker.result_ready.connect(self._on_finished)
@@ -1221,7 +1162,6 @@ class MainWindow(QMainWindow):
 
     @Slot(object, str)
     def _on_finished(self, payload: dict, preview: str):
-        self.convert_btn.setEnabled(True)
         self.pending_convert_btn.setEnabled(True)
         self.clear_input_btn.setEnabled(True)
 
@@ -1240,7 +1180,6 @@ class MainWindow(QMainWindow):
         else:
             self._last_output_dir = None
 
-        self._populate_results_table(rows)
         converted_rows = [
             ConvertedItem(
                 source=row.get("source", ""),
@@ -1251,11 +1190,13 @@ class MainWindow(QMainWindow):
             for row in rows
             if row.get("target")
         ]
+        self._last_run_sources = {item.source for item in converted_rows}
         if converted_rows:
             self._workspace.converted_items.extend(converted_rows)
-            self._refresh_converted_table()
+        self._refresh_converted_table()
 
-            completed_sources = {item.source for item in converted_rows}
+        if converted_rows:
+            completed_sources = self._last_run_sources
             remaining_sources = [
                 source
                 for source in self._workspace.pending_sources

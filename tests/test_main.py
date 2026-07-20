@@ -330,7 +330,7 @@ def _install_fake_docling_format_options(monkeypatch):
 
 def test_build_document_converter_disabled_returns_plain_converter(monkeypatch):
     from docling_converter import conversion_logic
-    from docling_converter.app_settings import VlmSettings
+    from docling_converter.workspace_model import VlmSettings
 
     converter_calls = _install_fake_docling_format_options(monkeypatch)
 
@@ -342,7 +342,7 @@ def test_build_document_converter_disabled_returns_plain_converter(monkeypatch):
 
 def test_build_document_converter_enabled_wires_picture_description(monkeypatch):
     from docling_converter import conversion_logic
-    from docling_converter.app_settings import VlmSettings
+    from docling_converter.workspace_model import VlmSettings
 
     converter_calls = _install_fake_docling_format_options(monkeypatch)
 
@@ -417,7 +417,6 @@ def test_start_conversion_empty_input_and_output_shows_validation_errors(qapp):
     window.output_dir_edit.setText("")
     window._start_conversion()
 
-    assert window.results_table.rowCount() == 0
     assert window._worker is None
     window.close()
 
@@ -431,7 +430,6 @@ def test_start_conversion_invalid_output_directory_shows_error(qapp, tmp_path):
     window.output_dir_edit.setText(str(tmp_path / "not_there"))
     window._start_conversion()
 
-    assert window.results_table.rowCount() == 0
     assert window._worker is None
     window.close()
 
@@ -442,7 +440,6 @@ def test_start_conversion_invalid_input_paths_show_resolve_errors(qapp, tmp_path
     window.output_dir_edit.setText(str(tmp_path))
     window._start_conversion()
 
-    assert window.results_table.rowCount() == 0
     assert window._worker is None
     window.close()
 
@@ -473,8 +470,8 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     assert worker.was_started is True
 
     assert window._worker is worker
-    assert window.convert_btn.isEnabled() is False
-    assert window.progress_bar.isHidden() is False
+    assert window.pending_convert_btn.isEnabled() is False
+    assert window.pending_progress_bar.isHidden() is False
 
     assert window._on_progress in worker.progress.callbacks
     assert window._on_finished in worker.result_ready.callbacks
@@ -660,7 +657,7 @@ def test_append_pending_sources_expands_directory_and_updates_queue(qapp, tmp_pa
         str(supported.resolve()),
         "https://example.com/doc",
     ]
-    assert window.pending_list.count() == 2
+    assert window.input_files_table.rowCount() == 2
     assert window.input_text.toPlainText() == (
         f"{supported.resolve()}\nhttps://example.com/doc"
     )
@@ -675,7 +672,7 @@ def test_remove_selected_pending_sources_updates_workspace_and_input(qapp, tmp_p
 
     window = main.MainWindow()
     window._append_pending_sources([str(first), str(second)])
-    window.pending_list.setCurrentRow(0)
+    window.input_files_table.selectRow(0)
 
     window._remove_selected_pending_sources()
 
@@ -709,9 +706,9 @@ def test_discovered_wiki_pages_join_pending_and_removal_excludes_page(qapp):
 
     assert window._workspace.wiki_imports == [wiki_import]
     assert window._workspace.pending_sources == [page.original_url]
-    assert window.pending_list.count() == 1
+    assert window.input_files_table.rowCount() == 1
 
-    window.pending_list.setCurrentRow(0)
+    window.input_files_table.selectRow(0)
     window._remove_selected_pending_sources()
 
     assert page.included is False
@@ -746,7 +743,7 @@ def test_wiki_batch_rejects_json_before_starting_worker(qapp, tmp_path):
     window._start_conversion()
 
     assert window._worker is None
-    assert "Markdown and HTML only" in window.status_label.text()
+    assert "Markdown and HTML only" in window.pending_status_label.text()
     window.close()
 
 
@@ -778,7 +775,7 @@ def test_wiki_batch_rejects_mixed_ordinary_sources(qapp, tmp_path):
     window._start_conversion()
 
     assert window._worker is None
-    assert "separately" in window.status_label.text()
+    assert "separately" in window.pending_status_label.text()
     window.close()
 
 
@@ -787,10 +784,8 @@ def test_set_status_message_updates_shared_progress_views(qapp):
 
     window._set_status_message("Working...", busy=True, style="color: blue;")
 
-    assert window.status_label.text() == "Working..."
     assert window.pending_status_label.text() == "Working..."
     assert window.converted_status_label.text() == "Working..."
-    assert window.progress_bar.isHidden() is False
     assert window.pending_progress_bar.isHidden() is False
     assert window.converted_progress_bar.isHidden() is False
     window.close()
@@ -799,7 +794,6 @@ def test_set_status_message_updates_shared_progress_views(qapp):
 def test_on_finished_updates_converted_history(qapp):
     window = main.MainWindow()
     window._workspace.pending_sources = ["C:/docs/a.pdf"]
-    window._refresh_pending_list()
 
     payload = {
         "rows": [
@@ -822,6 +816,8 @@ def test_on_finished_updates_converted_history(qapp):
     assert window._workspace.pending_sources == []
     assert window.converted_table.rowCount() == 1
     assert window.converted_table.item(0, 1).text() == "C:/docs/a.pdf"
+    assert window._last_run_sources == {"C:/docs/a.pdf"}
+    assert window.converted_table.item(0, 1).font().bold() is True
     window.close()
 
 
@@ -906,8 +902,8 @@ def test_blank_manual_edit_reenables_auto_filename(qapp, tmp_path):
 
 def test_on_finished_sets_done_state_and_table_for_json_doctags(qapp):
     window = main.MainWindow()
-    window.convert_btn.setEnabled(False)
-    window.progress_bar.setVisible(True)
+    window.pending_convert_btn.setEnabled(False)
+    window.pending_progress_bar.setVisible(True)
 
     payload = {
         "rows": [
@@ -925,21 +921,22 @@ def test_on_finished_sets_done_state_and_table_for_json_doctags(qapp):
 
     window.format_combo.setCurrentText("JSON (.json)")
     window._on_finished(payload, "json preview")
-    assert window.status_label.text() == "Done."
-    assert window.convert_btn.isEnabled() is True
-    assert window.progress_bar.isVisible() is False
-    assert window.results_table.rowCount() == 1
-    assert "OK" in window.results_table.item(0, 0).text()
-    assert window.results_table.item(0, 1).text() == "C:/docs/a.pdf"
-    assert window.results_table.item(0, 2).text() == "a.json"
+    assert window.pending_status_label.text() == "Done."
+    assert window.pending_convert_btn.isEnabled() is True
+    assert window.pending_progress_bar.isVisible() is False
+    assert window.converted_table.rowCount() == 1
+    assert "OK" in window.converted_table.item(0, 0).text()
+    assert window.converted_table.item(0, 1).text() == "C:/docs/a.pdf"
+    assert window.converted_table.item(0, 2).text() == "a.json"
 
-    window.convert_btn.setEnabled(False)
-    window.progress_bar.setVisible(True)
+    window.pending_convert_btn.setEnabled(False)
+    window.pending_progress_bar.setVisible(True)
     window.format_combo.setCurrentText("DocTags (.doctags)")
     window._on_finished(payload, "tags preview")
-    assert window.status_label.text() == "Done."
-    assert window.convert_btn.isEnabled() is True
-    assert window.progress_bar.isVisible() is False
+    assert window.pending_status_label.text() == "Done."
+    assert window.pending_convert_btn.isEnabled() is True
+    assert window.pending_progress_bar.isVisible() is False
+    assert window.converted_table.rowCount() == 2
     window.close()
 
 
@@ -961,11 +958,11 @@ def test_on_finished_uses_markdown_and_html_branches(qapp):
 
     window.format_combo.setCurrentText("Markdown (.md)")
     window._on_finished(payload, "# title")
-    assert window.results_table.rowCount() == 1
+    assert window.converted_table.rowCount() == 1
 
     window.format_combo.setCurrentText("HTML (.html)")
     window._on_finished(payload, "<h1>Title</h1>")
-    assert window.results_table.rowCount() == 1
+    assert window.converted_table.rowCount() == 2
     window.close()
 
 

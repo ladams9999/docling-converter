@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from PySide6.QtCore import QThread, Signal
 
-from docling_converter.app_settings import VlmSettings
+from docling_converter.workspace_model import VlmSettings
 
 FORMAT_OPTIONS = {
     "Markdown (.md)": {"ext": ".md", "key": "markdown"},

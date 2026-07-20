@@ -81,13 +81,21 @@ it can be broken into a concrete, individually pickable task.
 
 ### User Interface
 
-- **Settings** controls the workspace base directory, default export format,
-  and VLM picture-description configuration (endpoint, model, API key).
-- **Workspace** controls workspace creation, labels, files, sources, per-file
-  formats, planned outputs, and target directory.
-- **Pending** supports files, directories, single URLs, wiki discovery, queue
+Tabs are split by scope: **Settings** is app-wide (independent of any
+workspace); **Workspace**, **Pending**, and **Converted** are all scoped to
+the open workspace.
+
+- **Settings** controls the workspace base directory — the one app-wide
+  preference.
+- **Workspace** controls workspace creation/load/save, label, default export
+  format, VLM picture-description configuration (endpoint, model, API key),
+  and output filename — everything in `WorkspaceSettings`.
+- **Pending** is where sources are queued: paste/drag-drop input, files,
+  directories, single URLs, wiki discovery, per-file format overrides, queue
   removal, progress, and cancellation.
-- **Converted** records successful output history and shared processing state.
+- **Converted** shows where output went and what's completed: output
+  directory, planned output files, and converted history (rows from the most
+  recent run are highlighted).
 
 ### Standard Conversion
 
