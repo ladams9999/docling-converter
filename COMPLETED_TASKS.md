@@ -57,7 +57,16 @@
 - Verified the existing per-source JSON export plumbing produces a full,
   structurally faithful `DoclingDocument` for ordinary files, not a stub.
 - Added optional VLM-based picture description for PDF/image sources: a
-  Settings-tab toggle plus provider-agnostic endpoint/model/API-key
-  configuration (defaulting to a local Ollama server), and filtered
-  docling's own internal deprecation warnings so a successful captioned
-  conversion doesn't show as a false "Warning".
+  toggle plus provider-agnostic endpoint/model/API-key configuration
+  (defaulting to a local Ollama server), and filtered docling's own internal
+  deprecation warnings so a successful captioned conversion doesn't show as a
+  false "Warning".
+- Reorganized tabs by scope, per user feedback: **Settings** is app-wide only
+  (workspace base directory); **Workspace** holds everything in
+  `WorkspaceSettings` (label, default format, VLM picture description now
+  per-workspace instead of a global app setting, output filename); **Pending**
+  is choosing what to convert (input area/table replacing the old plain
+  source list, Add buttons, the single Convert action); **Converted** is
+  where output went (output directory/files, converted history — the
+  redundant ephemeral results table was retired, with rows from the most
+  recent run bold+highlighted in the history table instead).
