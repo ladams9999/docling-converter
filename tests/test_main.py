@@ -643,6 +643,30 @@ def test_load_workspace_to_path_applies_workspace_state(qapp, tmp_path):
     window.close()
 
 
+def test_load_workspace_clears_stale_last_run_highlight(qapp, tmp_path):
+    workspace = WorkspaceData(
+        converted_items=[
+            ConvertedItem(
+                source=str(tmp_path / "sample.pdf"),
+                target="sample.md",
+                severity="success",
+                messages=[],
+            )
+        ],
+    )
+    workspace_path = tmp_path / "workspace.json"
+    save_workspace(workspace, workspace_path)
+
+    window = main.MainWindow()
+    window._last_run_sources = {str(tmp_path / "sample.pdf")}
+
+    window._load_workspace_to_path(workspace_path)
+
+    assert window._last_run_sources == set()
+    assert window.converted_table.item(0, 1).font().bold() is False
+    window.close()
+
+
 def test_append_pending_sources_expands_directory_and_updates_queue(qapp, tmp_path):
     folder = tmp_path / "inputs"
     folder.mkdir()

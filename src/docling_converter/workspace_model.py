@@ -10,6 +10,27 @@ DEFAULT_VLM_API_URL = "http://localhost:11434/v1/chat/completions"
 DEFAULT_VLM_MODEL = "granite3.2-vision:2b"
 
 
+def _coerce_bool(value, default: bool = False) -> bool:
+    """Parse a bool from JSON-decoded or manually-edited workspace data.
+
+    `bool("false")` is True in plain Python, which would silently flip a
+    manually edited `"enabled": "false"` to on -- this treats common
+    string/number representations explicitly instead.
+    """
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return default
+
+
 @dataclass(slots=True)
 class VlmSettings:
     """Provider-agnostic, per-workspace config for VLM picture description.
@@ -35,7 +56,7 @@ class VlmSettings:
     @classmethod
     def from_dict(cls, data: dict) -> "VlmSettings":
         return cls(
-            enabled=bool(data.get("enabled", False)),
+            enabled=_coerce_bool(data.get("enabled"), False),
             api_url=str(data.get("api_url", "")).strip() or DEFAULT_VLM_API_URL,
             model=str(data.get("model", "")).strip() or DEFAULT_VLM_MODEL,
             api_key=str(data.get("api_key", "")).strip(),

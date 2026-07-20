@@ -70,7 +70,7 @@ chat-completions endpoint:
   Saved in plaintext in the workspace JSON file — avoid entering a long-lived
   key here if you share or version-control your workspace files.
 
-Switching providers/models is a Settings change, not a code change.
+Switching providers/models is a Workspace-tab change, not a code change.
 
 The workspace queue drives conversion. When a queued item converts
 successfully, it moves into the converted history and is removed from the

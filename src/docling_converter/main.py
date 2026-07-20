@@ -668,6 +668,7 @@ class MainWindow(QMainWindow):
 
     def _apply_workspace_to_ui(self, workspace: WorkspaceData):
         self._applying_workspace = True
+        self._last_run_sources = set()
         try:
             self._workspace = workspace
 

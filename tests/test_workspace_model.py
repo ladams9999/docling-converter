@@ -34,6 +34,17 @@ def test_vlm_settings_from_dict_falls_back_to_defaults_for_blank_url_and_model()
     assert restored.model == "granite3.2-vision:2b"
 
 
+def test_vlm_settings_from_dict_parses_string_enabled_values():
+    assert VlmSettings.from_dict({"enabled": "false"}).enabled is False
+    assert VlmSettings.from_dict({"enabled": "False"}).enabled is False
+    assert VlmSettings.from_dict({"enabled": ""}).enabled is False
+    assert VlmSettings.from_dict({"enabled": "0"}).enabled is False
+    assert VlmSettings.from_dict({"enabled": "true"}).enabled is True
+    assert VlmSettings.from_dict({"enabled": "1"}).enabled is True
+    assert VlmSettings.from_dict({"enabled": True}).enabled is True
+    assert VlmSettings.from_dict({"enabled": False}).enabled is False
+
+
 def test_workspace_data_defaults_are_ui_safe():
     workspace = WorkspaceData()
 
