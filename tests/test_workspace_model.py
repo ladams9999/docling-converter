@@ -1,5 +1,48 @@
-from docling_converter.workspace_model import ConvertedItem, WorkspaceData, WorkspaceSettings
+from docling_converter.workspace_model import (
+    ConvertedItem,
+    VlmSettings,
+    WorkspaceData,
+    WorkspaceSettings,
+)
 from docling_converter.wiki_model import WikiAsset, WikiImport, WikiPage
+
+
+def test_vlm_settings_defaults():
+    assert VlmSettings() == VlmSettings(
+        enabled=False,
+        api_url="http://localhost:11434/v1/chat/completions",
+        model="granite3.2-vision:2b",
+        api_key="",
+    )
+
+
+def test_vlm_settings_round_trip():
+    vlm_settings = VlmSettings(
+        enabled=True,
+        api_url="https://api.example.com/v1/chat/completions",
+        model="some-other-vision-model",
+        api_key="secret",
+    )
+
+    assert VlmSettings.from_dict(vlm_settings.to_dict()) == vlm_settings
+
+
+def test_vlm_settings_from_dict_falls_back_to_defaults_for_blank_url_and_model():
+    restored = VlmSettings.from_dict({"api_url": "  ", "model": ""})
+
+    assert restored.api_url == "http://localhost:11434/v1/chat/completions"
+    assert restored.model == "granite3.2-vision:2b"
+
+
+def test_vlm_settings_from_dict_parses_string_enabled_values():
+    assert VlmSettings.from_dict({"enabled": "false"}).enabled is False
+    assert VlmSettings.from_dict({"enabled": "False"}).enabled is False
+    assert VlmSettings.from_dict({"enabled": ""}).enabled is False
+    assert VlmSettings.from_dict({"enabled": "0"}).enabled is False
+    assert VlmSettings.from_dict({"enabled": "true"}).enabled is True
+    assert VlmSettings.from_dict({"enabled": "1"}).enabled is True
+    assert VlmSettings.from_dict({"enabled": True}).enabled is True
+    assert VlmSettings.from_dict({"enabled": False}).enabled is False
 
 
 def test_workspace_data_defaults_are_ui_safe():
@@ -32,6 +75,12 @@ def test_workspace_data_round_trips_nested_state():
             format_label="JSON (.json)",
             custom_filename="bundle.json",
             auto_filename_enabled=False,
+            vlm_settings=VlmSettings(
+                enabled=True,
+                api_url="https://api.example.com/v1/chat/completions",
+                model="some-other-vision-model",
+                api_key="secret",
+            ),
         ),
     )
 

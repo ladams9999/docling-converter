@@ -26,6 +26,7 @@ Automated coverage currently includes:
   - default workspace model values
   - nested workspace/settings/converted-item round-tripping
   - converted-item normalization behavior
+  - VLM picture-description settings defaults and round-tripping
 - `test_workspace_persistence.py`
   - versioned JSON save/load round-tripping
   - version stamping
@@ -37,7 +38,6 @@ Automated coverage currently includes:
   - workspace label slugging and workspace filename resolution
 - `test_app_settings.py`
   - application base-directory persistence
-  - VLM picture-description settings defaults and round-tripping
 - `test_wiki_urls.py`
   - URL canonicalization, root/scope rules, sub-wiki traversal, safe flattened
     filenames, and deterministic collisions
@@ -85,23 +85,28 @@ uv run docling-converter
 
 Verify these behaviors interactively:
 
-1. Add a local file on the **Workspace** tab with an empty output directory.
+1. Add a local file on the **Pending** tab with an empty output directory
+   (on **Converted**).
    Expected: the output directory auto-fills to that file's folder.
-2. Add a URL on the **Workspace** or **Pending** surface with an empty output
-   directory.
+2. Add a URL on the **Pending** tab with an empty output directory.
    Expected: the output directory falls back to `~/Downloads` or the home
    directory fallback.
-3. Save a workspace, close the app, relaunch it, and load that workspace.
-   Expected: pending sources, output directory, selected format, filename mode,
-   and converted history restore correctly.
+3. Set a default format, VLM config, and output filename on **Workspace**;
+   queue sources on **Pending**; save the workspace, close the app, relaunch
+   it, and load that workspace.
+   Expected: pending sources, output directory, selected format, VLM config,
+   filename mode, and converted history all restore correctly.
 4. Add files, a directory, and a single URL on the **Pending** tab.
    Expected: the queue expands supported directory contents and displays all
-   pending sources.
-5. Convert a queued file and click **Open output directory**.
+   pending sources in the Input files table, with per-file format overrides
+   available.
+5. Convert a queued file (**Convert pending** on **Pending**) and click
+   **Open output directory** on **Converted**.
    Expected: the OS file explorer opens that directory, the item disappears
-   from **Pending**, and it appears in **Converted**.
-6. Confirm the shared processing state updates on the **Workspace**,
-   **Pending**, and **Converted** tabs during an active conversion.
+   from **Pending**, and it appears in **Converted** — highlighted as the
+   most recent run.
+6. Confirm the shared processing state updates on the **Pending** and
+   **Converted** tabs during an active conversion.
 7. Import `https://foundryvtt.com/api/v13/` as a whole wiki, confirm the inferred
    root, cancel once, then rediscover and review Pending pages.
 8. Import
@@ -112,9 +117,13 @@ Verify these behaviors interactively:
    filenames, local links, and `original_url`/`fetched_at` provenance are present.
 10. Repeat with assets enabled and an existing target file. Expected: assets are
     written below `assets/`, and the full conflict list requires confirmation.
-11. Enable "Describe pictures during conversion" on **Settings** (defaults
+11. Enable "Describe pictures during conversion" on **Workspace** (defaults
     target a local Ollama server) and convert a PDF or image containing a
     picture. Expected: the output includes a generated caption beneath the
-    `<!-- image -->` placeholder, and the row shows **success**, not
-    **warning** (docling's internal deprecation notices from the
-    picture-description path are filtered, not surfaced).
+    `<!-- image -->` placeholder, and the row in **Converted** shows
+    **success**, not **warning** (docling's internal deprecation notices from
+    the picture-description path are filtered, not surfaced).
+12. Create two workspaces with different VLM settings (e.g. one enabled with
+    a custom model, one disabled). Switch between them (load each). Expected:
+    the Workspace tab's VLM fields reflect whichever workspace is loaded, not
+    a shared app-wide value.

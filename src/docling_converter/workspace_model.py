@@ -6,6 +6,62 @@ from dataclasses import dataclass, field
 
 from docling_converter.wiki_model import WikiImport, WikiPage
 
+DEFAULT_VLM_API_URL = "http://localhost:11434/v1/chat/completions"
+DEFAULT_VLM_MODEL = "granite3.2-vision:2b"
+
+
+def _coerce_bool(value, default: bool = False) -> bool:
+    """Parse a bool from JSON-decoded or manually-edited workspace data.
+
+    `bool("false")` is True in plain Python, which would silently flip a
+    manually edited `"enabled": "false"` to on -- this treats common
+    string/number representations explicitly instead.
+    """
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return default
+
+
+@dataclass(slots=True)
+class VlmSettings:
+    """Provider-agnostic, per-workspace config for VLM picture description.
+
+    Any OpenAI-compatible chat-completions endpoint works here (local
+    Ollama by default, but also LM Studio, vLLM, or a hosted API) --
+    switching providers is just changing these fields, not code.
+    """
+
+    enabled: bool = False
+    api_url: str = DEFAULT_VLM_API_URL
+    model: str = DEFAULT_VLM_MODEL
+    api_key: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "enabled": self.enabled,
+            "api_url": self.api_url,
+            "model": self.model,
+            "api_key": self.api_key,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "VlmSettings":
+        return cls(
+            enabled=_coerce_bool(data.get("enabled"), False),
+            api_url=str(data.get("api_url", "")).strip() or DEFAULT_VLM_API_URL,
+            model=str(data.get("model", "")).strip() or DEFAULT_VLM_MODEL,
+            api_key=str(data.get("api_key", "")).strip(),
+        )
+
 
 @dataclass(slots=True)
 class ConvertedItem:
@@ -41,12 +97,14 @@ class WorkspaceSettings:
     format_label: str = "Markdown (.md)"
     custom_filename: str = ""
     auto_filename_enabled: bool = True
+    vlm_settings: VlmSettings = field(default_factory=VlmSettings)
 
     def to_dict(self) -> dict:
         return {
             "format_label": self.format_label,
             "custom_filename": self.custom_filename,
             "auto_filename_enabled": self.auto_filename_enabled,
+            "vlm_settings": self.vlm_settings.to_dict(),
         }
 
     @classmethod
@@ -55,6 +113,7 @@ class WorkspaceSettings:
             format_label=str(data.get("format_label", "Markdown (.md)")),
             custom_filename=str(data.get("custom_filename", "")),
             auto_filename_enabled=bool(data.get("auto_filename_enabled", True)),
+            vlm_settings=VlmSettings.from_dict(data.get("vlm_settings", {})),
         )
 
 

@@ -28,11 +28,11 @@ The application follows a standard `src` layout: importable code lives under
 |------|---------|
 | `src/docling_converter/main.py` | PySide6 application entry point and top-level tab orchestration |
 | `src/docling_converter/conversion_logic.py` | Conversion worker, export helpers, source resolution, and PDF chunking logic |
-| `src/docling_converter/workspace_model.py` | Serializable workspace state models |
+| `src/docling_converter/workspace_model.py` | Serializable workspace state models, including per-workspace VLM picture-description settings |
 | `src/docling_converter/workspace_persistence.py` | Versioned workspace save/load helpers |
 | `src/docling_converter/workspace_paths.py` | Default home-based workspace path helpers |
 | `src/docling_converter/workspace_ui.py` | New Workspace dialog and path resolution |
-| `src/docling_converter/app_settings.py` | Application-scoped base-directory and VLM picture-description settings persistence |
+| `src/docling_converter/app_settings.py` | Application-scoped base-directory settings persistence |
 | `src/docling_converter/wiki_model.py` | Serializable wiki page, import, asset, and provenance models |
 | `src/docling_converter/wiki_urls.py` | URL canonicalization, scope, and flattened filename rules |
 | `src/docling_converter/wiki_discovery.py` | Background wiki crawler and snapshot/asset cache |
@@ -93,8 +93,8 @@ Key responsibilities:
 
 - managing tabs for **Settings**, **Workspace**, **Pending**, and **Converted**
 - collecting sources from pasted text, drag-and-drop, file dialogs, and single
-  URL entry
-- synchronizing queue state between the Workspace and Pending surfaces
+  URL entry (all on the Pending tab)
+- synchronizing the pending queue between the input area and Input files table
 - saving and loading workspace files
 - managing export format and output filename state
 - starting background conversion work from the workspace-backed pending queue
@@ -152,7 +152,10 @@ the source list as newline-separated entries.
 
 - `WorkspaceData`: changeable label, target directory, pending sources,
   per-source format overrides, converted items, UI settings, and wiki imports
-- `WorkspaceSettings`: default export format, custom filename, and auto-name mode
+- `WorkspaceSettings`: default export format, custom filename, auto-name mode,
+  and VLM picture-description settings
+- `VlmSettings`: enabled flag, API URL, model, and API key for VLM picture
+  description — provider-agnostic, per-workspace
 - `ConvertedItem`: source/target/severity/message data for converted history
 
 ### `wiki_model.py`
@@ -231,44 +234,54 @@ available for ordinary files and single URLs.
 
 `_build_document_converter(vlm_settings)` in `conversion_logic.py` wires
 docling's `PictureDescriptionApiOptions` into the PDF/image pipelines when
-enabled in Settings (`app_settings.VlmSettings`). It targets any
-OpenAI-compatible chat-completions endpoint (`api_url`/`model`/`api_key`),
-defaulting to a local Ollama server running `granite3.2-vision:2b` — no
-docling-side code changes are needed to switch models or providers, only the
-Settings fields. Disabled by default; other formats (DOCX, HTML, etc.) are
-unaffected regardless of this setting since they don't go through the
+enabled. Config lives in `WorkspaceSettings.vlm_settings`
+(`workspace_model.VlmSettings`) — per-workspace, not app-wide, and persisted
+with the workspace JSON. It targets any OpenAI-compatible chat-completions
+endpoint (`api_url`/`model`/`api_key`), defaulting to a local Ollama server
+running `granite3.2-vision:2b` — no docling-side code changes are needed to
+switch models or providers, only the Workspace-tab fields. Disabled by
+default; other formats (DOCX, HTML, etc.) are unaffected regardless of this
+setting since they don't go through the
 picture-detecting PDF/image pipelines.
 
 ## UI Layout
 
-The main window now uses top-level tabs:
+The main window uses top-level tabs, split by scope: **Settings** holds
+app-wide preferences (independent of any workspace); **Workspace** holds
+everything scoped to the open workspace, i.e. everything in
+`WorkspaceSettings`; **Pending** is choosing what to convert; **Converted**
+is where output went and what has completed.
 
 1. **Settings**
-   - persistent workspace base directory
+   - persistent workspace base directory (the only app-wide preference)
+2. **Workspace**
+   - **New workspace...**, **Load workspace...**, and **Save workspace...**,
+     changeable label and workspace file display
    - default export format selector
    - picture description (VLM) toggle, API URL, model, and API key fields
-2. **Workspace**
-   - changeable label and workspace file display
-   - **New workspace...**, **Load workspace...**, and **Save workspace...**
-   - source input area plus an Input files table with per-file formats
-   - derived Output files list and output filename field with **Auto**
-   - output directory field and picker
-   - **Convert** action, shared status, output-directory display, and results table
+   - output filename field with **Auto**
 3. **Pending**
    - shared processing state
+   - source input area (paste/drag-drop) plus **Browse files...**/**Clear**
    - queue controls for files, directories, single URLs, and wiki discovery
-   - queue list
-   - **Convert pending**, remove, and clear actions
+   - Input files table (source + per-file format override) — the single
+     queue display, fed by both the input area and the Add buttons
+   - **Convert pending**, remove selected, and clear actions
 4. **Converted**
    - shared processing state
-   - converted-history table
+   - output directory field/picker/display and **Open output directory**
+   - derived Output files list
+   - converted-history table; rows from the most recent conversion run are
+     bolded with a highlighted background (`MainWindow._last_run_sources`,
+     not persisted — resets each session/workspace load)
 
 ## Queue and Workspace Behavior
 
 - The pending queue is stored in `WorkspaceData.pending_sources`.
-- The Workspace tab input and Pending tab list stay synchronized.
+- The Pending tab's input area and Input files table stay synchronized.
 - Saving a workspace persists its label, pending sources, per-source formats,
-  converted history, target directory, and selected UI settings.
+  converted history, target directory, and selected UI settings (including
+  VLM picture-description config).
 - Loading a workspace restores those values into the UI.
 - Successful conversions are appended to converted history and removed from the
   pending queue.

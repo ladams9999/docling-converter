@@ -30,40 +30,47 @@ uv run docling-converter
 
 ## How to Use It
 
-1. Set the workspace base directory on **Settings**. Use **New workspace...**
-   to choose a label, output directory, and workspace filename.
-2. Add one or more sources by pasting paths or URLs, dragging files into the
-   Workspace tab input area, or use **Browse files...**.
-3. Choose an output directory on the **Workspace** tab, or leave it empty and
-   let the app auto-select one from the first writable local source directory
-   or your Downloads folder.
-4. Save or load a workspace file from the **Workspace** tab when needed. The
-   workspace label can be changed at any time.
-5. Review the Input files and Output files lists. Choose a default export
-   format on **Settings**, then change individual input formats as needed.
-6. Review and adjust the queued items on the **Pending** tab. You can add files,
-   a directory, a single URL, or a wiki import; remove selected items; or clear
-   the queue.
-7. Start conversion from **Convert** on the Workspace tab or **Convert pending**
-   on the Pending tab.
-8. Review completed items on the **Converted** tab.
+Tabs split by scope: **Settings** holds app-wide preferences that apply
+regardless of which workspace is open; **Workspace** holds everything scoped
+to the current workspace (identity, default format, VLM config, output
+filename); **Pending** is where you choose what to convert; **Converted** is
+where output went and what has completed.
+
+1. Set the workspace base directory on **Settings** — this is the one
+   app-wide preference, independent of any single workspace.
+2. On **Workspace**, use **New workspace...** to choose a label, output
+   directory, and workspace filename, or **Load workspace...** to reopen an
+   existing one. Set the workspace label, default export format, VLM picture
+   description, and output filename here — all of it is saved with the
+   workspace file.
+3. On **Pending**, add sources by pasting paths/URLs, dragging files into the
+   input area, or using **Browse files...**/**Add files...**/**Add
+   directory...**/**Add URL**/**Add wiki...**. Review and adjust the queue —
+   per-file format overrides, remove selected items, or clear the queue.
+4. Start conversion with **Convert pending** on the **Pending** tab.
+5. On **Converted**, set (or confirm) the output directory — leave it empty
+   and it auto-fills from the first writable local source directory or your
+   Downloads folder. Review the planned Output files list, and after
+   conversion, the full converted history: rows from the most recent run are
+   highlighted, click **Open output directory** to jump to the result.
 
 ## Picture Description (VLM)
 
-On **Settings**, enable "Describe pictures during conversion" to have a
-vision-language model caption pictures found in PDF and image sources during
-conversion. Configure any OpenAI-compatible chat-completions endpoint:
+On the **Workspace** tab, enable "Describe pictures during conversion" to
+have a vision-language model caption pictures found in PDF and image sources
+during conversion — this is per-workspace, so different workspaces can use
+different models or have it off entirely. Configure any OpenAI-compatible
+chat-completions endpoint:
 
 - **API URL** — defaults to a local Ollama server
   (`http://localhost:11434/v1/chat/completions`).
 - **Model** — the model tag to request (defaults to `granite3.2-vision:2b`;
   any vision-capable Ollama model works, e.g. `qwen2.5vl`, `llava`).
 - **API key** — optional, only needed for a hosted API that requires one.
-  Stored in plaintext via Qt's `QSettings` (an INI file or the registry,
-  depending on platform) — avoid entering a long-lived key here on a shared
-  machine.
+  Saved in plaintext in the workspace JSON file — avoid entering a long-lived
+  key here if you share or version-control your workspace files.
 
-Switching providers/models is a Settings change, not a code change.
+Switching providers/models is a Workspace-tab change, not a code change.
 
 The workspace queue drives conversion. When a queued item converts
 successfully, it moves into the converted history and is removed from the
