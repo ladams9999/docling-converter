@@ -2,8 +2,6 @@
 
 Tasks below are intentionally small and individually pickable.
 
----
-
 Nothing currently pending here.
 
 - See `PROJECT_PLAN.md`'s **Upcoming Goals** for larger, gated, or
