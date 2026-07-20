@@ -45,12 +45,32 @@ def test_vlm_settings_from_dict_parses_string_enabled_values():
     assert VlmSettings.from_dict({"enabled": False}).enabled is False
 
 
+def test_workspace_settings_ocr_defaults_to_enabled():
+    # Matches docling's own PdfPipelineOptions.do_ocr default, so an
+    # existing workspace file with no ocr_enabled key behaves unchanged.
+    assert WorkspaceSettings().ocr_enabled is True
+
+
+def test_workspace_settings_ocr_round_trip():
+    settings = WorkspaceSettings(ocr_enabled=False)
+
+    assert WorkspaceSettings.from_dict(settings.to_dict()).ocr_enabled is False
+
+
+def test_workspace_settings_ocr_from_dict_parses_string_values():
+    assert WorkspaceSettings.from_dict({"ocr_enabled": "false"}).ocr_enabled is False
+    assert WorkspaceSettings.from_dict({"ocr_enabled": "0"}).ocr_enabled is False
+    assert WorkspaceSettings.from_dict({"ocr_enabled": "true"}).ocr_enabled is True
+    assert WorkspaceSettings.from_dict({}).ocr_enabled is True
+
+
 def test_workspace_data_defaults_are_ui_safe():
     workspace = WorkspaceData()
 
     assert workspace.target_dir == ""
     assert workspace.pending_sources == []
     assert workspace.converted_items == []
+    assert workspace.source_ocr_overrides == {}
     assert workspace.settings == WorkspaceSettings()
 
 
@@ -62,6 +82,9 @@ def test_workspace_data_round_trips_nested_state():
         source_formats={
             r"C:\docs\a.pdf": "HTML (.html)",
             "https://example.com/page": "JSON (.json)",
+        },
+        source_ocr_overrides={
+            r"C:\docs\a.pdf": False,
         },
         converted_items=[
             ConvertedItem(
@@ -81,6 +104,7 @@ def test_workspace_data_round_trips_nested_state():
                 model="some-other-vision-model",
                 api_key="secret",
             ),
+            ocr_enabled=False,
         ),
     )
 

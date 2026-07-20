@@ -276,6 +276,7 @@ def _install_fake_docling_format_options(monkeypatch):
 
     class _FakePipelineOptions:
         def __init__(self):
+            self.do_ocr = True
             self.do_picture_description = False
             self.enable_remote_services = False
             self.picture_description_options = None
@@ -340,6 +341,114 @@ def test_build_document_converter_disabled_returns_plain_converter(monkeypatch):
     assert converter_calls[0].format_options is None
 
 
+def test_build_document_converter_ocr_disabled_sets_do_ocr_false(monkeypatch):
+    from docling_converter import conversion_logic
+    from docling_converter.workspace_model import VlmSettings
+
+    converter_calls = _install_fake_docling_format_options(monkeypatch)
+
+    conversion_logic._build_document_converter(VlmSettings(enabled=False), ocr_enabled=False)
+
+    assert len(converter_calls) == 1
+    format_options = converter_calls[0].format_options
+    assert set(format_options.keys()) == {"pdf", "image"}
+    for option in format_options.values():
+        assert option.pipeline_options.do_ocr is False
+        assert option.pipeline_options.do_picture_description is False
+
+
+def test_build_document_converter_ocr_and_vlm_both_enabled(monkeypatch):
+    from docling_converter import conversion_logic
+    from docling_converter.workspace_model import VlmSettings
+
+    converter_calls = _install_fake_docling_format_options(monkeypatch)
+
+    vlm_settings = VlmSettings(enabled=True, api_key="secret")
+    conversion_logic._build_document_converter(vlm_settings, ocr_enabled=False)
+
+    assert len(converter_calls) == 1
+    format_options = converter_calls[0].format_options
+    for option in format_options.values():
+        assert option.pipeline_options.do_ocr is False
+        assert option.pipeline_options.do_picture_description is True
+
+
+def test_worker_converter_for_caches_per_ocr_setting(monkeypatch):
+    from docling_converter import conversion_logic
+
+    build_calls = []
+
+    class _FakeConverter:
+        def __init__(self, ocr_enabled):
+            self.ocr_enabled = ocr_enabled
+
+    def _fake_build(vlm_settings, ocr_enabled=True):
+        build_calls.append(ocr_enabled)
+        return _FakeConverter(ocr_enabled)
+
+    monkeypatch.setattr(conversion_logic, "_build_document_converter", _fake_build)
+
+    worker = conversion_logic.ConversionWorker(
+        [], Path("."), conversion_logic.FORMAT_OPTIONS["Markdown (.md)"], ""
+    )
+
+    first = worker._converter_for(True)
+    second = worker._converter_for(True)
+    third = worker._converter_for(False)
+
+    assert first is second
+    assert first is not third
+    assert build_calls == [True, False]
+
+
+def test_worker_run_resolves_per_source_ocr_override(monkeypatch, tmp_path):
+    from docling_converter import conversion_logic
+
+    source_a = tmp_path / "default.pdf"
+    source_b = tmp_path / "override.pdf"
+    source_a.write_bytes(b"%PDF-1.4")
+    source_b.write_bytes(b"%PDF-1.4")
+
+    monkeypatch.setattr(conversion_logic, "_get_pdf_page_count", lambda _path: 1)
+    monkeypatch.setattr(conversion_logic, "_get_file_size_mb", lambda _path: 0.1)
+
+    requested_ocr_settings = []
+
+    class _FakeDocument:
+        def export_to_markdown(self):
+            return "content"
+
+    class _FakeResult:
+        document = _FakeDocument()
+        status = "success"
+        errors = []
+
+    class _FakeConverter:
+        def __init__(self, ocr_enabled):
+            self.ocr_enabled = ocr_enabled
+
+        def convert(self, source):
+            requested_ocr_settings.append(self.ocr_enabled)
+            return _FakeResult()
+
+    monkeypatch.setattr(
+        conversion_logic,
+        "_build_document_converter",
+        lambda vlm_settings, ocr_enabled=True: _FakeConverter(ocr_enabled),
+    )
+
+    worker = conversion_logic.ConversionWorker(
+        [source_a, source_b],
+        tmp_path,
+        conversion_logic.FORMAT_OPTIONS["Markdown (.md)"],
+        "",
+        source_ocr_overrides={str(source_b.resolve()): False},
+    )
+    worker.run()
+
+    assert requested_ocr_settings == [True, False]
+
+
 def test_build_document_converter_enabled_wires_picture_description(monkeypatch):
     from docling_converter import conversion_logic
     from docling_converter.workspace_model import VlmSettings
@@ -386,6 +495,8 @@ class _MockConversionWorker(main.ConversionWorker):
         custom_filename,
         source_formats=None,
         vlm_settings=None,
+        ocr_enabled=True,
+        source_ocr_overrides=None,
     ):
         self.sources = sources
         self.output_dir = output_dir
@@ -393,6 +504,8 @@ class _MockConversionWorker(main.ConversionWorker):
         self.custom_filename = custom_filename
         self.source_formats = source_formats or {}
         self.vlm_settings = vlm_settings
+        self.ocr_enabled = ocr_enabled
+        self.source_ocr_overrides = source_ocr_overrides or {}
         self.progress = _FakeSignal()
         self.result_ready = _FakeSignal()
         # Suppress type checking for finished signal override
@@ -479,6 +592,33 @@ def test_start_conversion_valid_input_creates_worker_and_sets_ui(
     window.close()
 
 
+def test_start_conversion_passes_workspace_ocr_setting_and_overrides(
+    qapp, monkeypatch, tmp_path
+):
+    _MockConversionWorker.instances.clear()
+    monkeypatch.setattr(main, "ConversionWorker", _MockConversionWorker)
+
+    source_a = tmp_path / "a.pdf"
+    source_b = tmp_path / "b.pdf"
+    source_a.write_text("x", encoding="utf-8")
+    source_b.write_text("x", encoding="utf-8")
+
+    window = main.MainWindow()
+    window._append_pending_sources([str(source_a), str(source_b)])
+    window.output_dir_edit.setText(str(tmp_path))
+    window.ocr_enabled_check.setChecked(False)
+
+    ocr_check = window.input_files_table.cellWidget(1, 2).findChild(main.QCheckBox)
+    ocr_check.setChecked(True)
+
+    window._start_conversion()
+
+    worker = _MockConversionWorker.instances[0]
+    assert worker.ocr_enabled is False
+    assert worker.source_ocr_overrides == {str(source_b.resolve()): True}
+    window.close()
+
+
 def test_pending_convert_button_starts_worker_from_workspace_queue(
     qapp, monkeypatch, tmp_path
 ):
@@ -556,6 +696,39 @@ def test_workspace_input_format_changes_derived_output_file(qapp, tmp_path):
         "HTML (.html)"
     )
     assert window.output_files_list.item(0).text() == "sample.html"
+    window.close()
+
+
+def test_workspace_input_ocr_override_changes_source_ocr_overrides(qapp, tmp_path):
+    input_file = tmp_path / "sample.pdf"
+    input_file.write_text("x", encoding="utf-8")
+    window = main.MainWindow()
+
+    window._append_pending_sources([str(input_file)])
+
+    assert window.input_files_table.rowCount() == 1
+    ocr_check = window.input_files_table.cellWidget(0, 2).findChild(main.QCheckBox)
+    assert ocr_check.isChecked() is True
+
+    ocr_check.setChecked(False)
+    assert window._workspace.source_ocr_overrides[str(input_file.resolve())] is False
+
+    # Toggling back to match the workspace default clears the override.
+    ocr_check.setChecked(True)
+    assert str(input_file.resolve()) not in window._workspace.source_ocr_overrides
+    window.close()
+
+
+def test_apply_workspace_to_ui_restores_ocr_setting(qapp, tmp_path):
+    window = main.MainWindow()
+    workspace = WorkspaceData(
+        target_dir=str(tmp_path),
+        settings=WorkspaceSettings(ocr_enabled=False),
+    )
+
+    window._apply_workspace_to_ui(workspace)
+
+    assert window.ocr_enabled_check.isChecked() is False
     window.close()
 
 

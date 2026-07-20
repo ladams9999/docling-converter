@@ -99,6 +99,17 @@ def _resolve_auto_output_directory(sources: list) -> Path:
     return _conversion_logic._resolve_auto_output_directory(sources)
 
 
+def _centered_cell_widget(inner: QWidget) -> QWidget:
+    """Wrap a widget (e.g. a checkbox) so it renders centered in a table cell."""
+
+    container = QWidget()
+    cell_layout = QHBoxLayout(container)
+    cell_layout.addWidget(inner)
+    cell_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    cell_layout.setContentsMargins(0, 0, 0, 0)
+    return container
+
+
 # ---------------------------------------------------------------------------
 # Drop-enabled text area
 # ---------------------------------------------------------------------------
@@ -229,6 +240,15 @@ class MainWindow(QMainWindow):
         default_format_layout.addWidget(self.format_combo)
         layout.addWidget(default_format_group)
 
+        ocr_group = QGroupBox("Text recognition (OCR)")
+        ocr_layout = QVBoxLayout(ocr_group)
+        self.ocr_enabled_check = QCheckBox(
+            "Recognize text in scanned pages/images (OCR)"
+        )
+        self.ocr_enabled_check.setChecked(self._workspace.settings.ocr_enabled)
+        ocr_layout.addWidget(self.ocr_enabled_check)
+        layout.addWidget(ocr_group)
+
         vlm_group = QGroupBox("Picture description (VLM)")
         vlm_layout = QFormLayout(vlm_group)
         self.vlm_enabled_check = QCheckBox("Describe pictures during conversion")
@@ -325,8 +345,10 @@ class MainWindow(QMainWindow):
         pending_controls_layout.addWidget(self.pending_add_wiki_btn)
         self.pending_layout.addLayout(pending_controls_layout)
 
-        self.input_files_table = QTableWidget(0, 2)
-        self.input_files_table.setHorizontalHeaderLabels(["Input file", "Format"])
+        self.input_files_table = QTableWidget(0, 3)
+        self.input_files_table.setHorizontalHeaderLabels(
+            ["Input file", "Format", "OCR"]
+        )
         self.input_files_table.verticalHeader().setVisible(False)
         self.input_files_table.setEditTriggers(
             QAbstractItemView.EditTrigger.NoEditTriggers
@@ -341,6 +363,9 @@ class MainWindow(QMainWindow):
         input_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         input_header.setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        input_header.setSectionResizeMode(
+            2, QHeaderView.ResizeMode.ResizeToContents
         )
         self.pending_layout.addWidget(self.input_files_table, stretch=1)
 
@@ -438,10 +463,11 @@ class MainWindow(QMainWindow):
         self.filename_edit.textEdited.connect(self._on_filename_edited)
         self.workspace_label_edit.textChanged.connect(self._on_workspace_label_changed)
         self.base_dir_edit.editingFinished.connect(self._save_base_directory_setting)
-        self.vlm_enabled_check.toggled.connect(self._on_vlm_settings_edited)
-        self.vlm_api_url_edit.editingFinished.connect(self._on_vlm_settings_edited)
-        self.vlm_model_edit.editingFinished.connect(self._on_vlm_settings_edited)
-        self.vlm_api_key_edit.editingFinished.connect(self._on_vlm_settings_edited)
+        self.ocr_enabled_check.toggled.connect(self._on_workspace_setting_edited)
+        self.vlm_enabled_check.toggled.connect(self._on_workspace_setting_edited)
+        self.vlm_api_url_edit.editingFinished.connect(self._on_workspace_setting_edited)
+        self.vlm_model_edit.editingFinished.connect(self._on_workspace_setting_edited)
+        self.vlm_api_key_edit.editingFinished.connect(self._on_workspace_setting_edited)
         self._apply_auto_filename()
         self._refresh_output_directory_display()
         self._refresh_workspace_path_display()
@@ -472,6 +498,7 @@ class MainWindow(QMainWindow):
             custom_filename=self.filename_edit.text().strip(),
             auto_filename_enabled=self._auto_filename_enabled,
             vlm_settings=self._current_vlm_settings(),
+            ocr_enabled=self.ocr_enabled_check.isChecked(),
         )
 
     def _current_vlm_settings(self) -> VlmSettings:
@@ -507,6 +534,11 @@ class MainWindow(QMainWindow):
             if source in self._workspace.pending_sources
             and format_label in FORMAT_OPTIONS
         }
+        self._workspace.source_ocr_overrides = {
+            source: enabled
+            for source, enabled in self._workspace.source_ocr_overrides.items()
+            if source in self._workspace.pending_sources
+        }
         self._sync_wiki_inclusion()
         self._workspace.settings = self._current_workspace_settings()
         self._refresh_workspace_file_lists()
@@ -517,6 +549,7 @@ class MainWindow(QMainWindow):
         self.input_files_table.setRowCount(0)
         self.output_files_list.clear()
         default_format = self.format_combo.currentText()
+        default_ocr = self.ocr_enabled_check.isChecked()
         for source in self._workspace.pending_sources:
             row = self.input_files_table.rowCount()
             self.input_files_table.insertRow(row)
@@ -532,6 +565,17 @@ class MainWindow(QMainWindow):
                 )
             )
             self.input_files_table.setCellWidget(row, 1, format_combo)
+
+            ocr_check = QCheckBox()
+            ocr_check.setChecked(
+                self._workspace.source_ocr_overrides.get(source, default_ocr)
+            )
+            ocr_check.toggled.connect(
+                lambda checked, selected_source=source: self._set_source_ocr(
+                    selected_source, checked
+                )
+            )
+            self.input_files_table.setCellWidget(row, 2, _centered_cell_widget(ocr_check))
         self.output_files_list.addItems(self._planned_output_names())
 
     def _set_source_format(self, source: str, format_label: str):
@@ -543,6 +587,14 @@ class MainWindow(QMainWindow):
             self._workspace.source_formats[source] = format_label
         self._update_auto_filename()
         self._refresh_output_files_list()
+
+    def _set_source_ocr(self, source: str, enabled: bool):
+        if self._applying_workspace or source not in self._workspace.pending_sources:
+            return
+        if enabled == self.ocr_enabled_check.isChecked():
+            self._workspace.source_ocr_overrides.pop(source, None)
+        else:
+            self._workspace.source_ocr_overrides[source] = enabled
 
     def _refresh_output_files_list(self):
         self.output_files_list.clear()
@@ -678,6 +730,8 @@ class MainWindow(QMainWindow):
 
             self.format_combo.setCurrentText(workspace.settings.format_label)
             self._auto_filename_enabled = workspace.settings.auto_filename_enabled
+
+            self.ocr_enabled_check.setChecked(workspace.settings.ocr_enabled)
 
             vlm_settings = workspace.settings.vlm_settings
             self.vlm_enabled_check.setChecked(vlm_settings.enabled)
@@ -821,7 +875,7 @@ class MainWindow(QMainWindow):
         save_base_directory(self._base_directory)
 
     @Slot()
-    def _on_vlm_settings_edited(self):
+    def _on_workspace_setting_edited(self):
         if self._applying_workspace:
             return
         self._sync_workspace_from_ui()
@@ -1081,6 +1135,11 @@ class MainWindow(QMainWindow):
             )
             for source in sources
         }
+        source_ocr_overrides = {
+            str(source): self._workspace.source_ocr_overrides[str(source)]
+            for source in sources
+            if str(source) in self._workspace.source_ocr_overrides
+        }
         wiki_format_labels = {
             source_formats[source] for source in wiki_sources
         }
@@ -1151,6 +1210,8 @@ class MainWindow(QMainWindow):
                 custom_filename,
                 source_formats,
                 self._workspace.settings.vlm_settings,
+                self._workspace.settings.ocr_enabled,
+                source_ocr_overrides,
             )
         self._worker.progress.connect(self._on_progress)
         self._worker.result_ready.connect(self._on_finished)

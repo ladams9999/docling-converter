@@ -61,40 +61,43 @@ PDF_SIZE_THRESHOLD_MB = 5.0
 VLM_API_TIMEOUT_SECONDS = 90.0
 
 
-def _build_document_converter(vlm_settings: VlmSettings | None):
-    """Build a DocumentConverter, wiring in VLM picture description if enabled.
+def _build_document_converter(vlm_settings: VlmSettings | None, ocr_enabled: bool = True):
+    """Build a DocumentConverter, wiring in OCR and VLM picture description.
 
-    Picture description only applies to the PDF/image pipelines (the ones
-    with real layout-detected picture regions to caption) -- other formats
-    convert with docling's defaults regardless of this setting.
+    Both only apply to the PDF/image pipelines (the ones with real
+    layout-detected pages/pictures) -- other formats convert with docling's
+    defaults regardless of these settings.
     """
 
     from docling.document_converter import DocumentConverter
 
-    if vlm_settings is None or not vlm_settings.enabled:
+    vlm_enabled = vlm_settings is not None and vlm_settings.enabled
+    if ocr_enabled and not vlm_enabled:
         return DocumentConverter()
 
     from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import (
-        PdfPipelineOptions,
-        PictureDescriptionApiOptions,
-    )
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.document_converter import ImageFormatOption, PdfFormatOption
 
     pipeline_options = PdfPipelineOptions()
-    pipeline_options.do_picture_description = True
-    pipeline_options.enable_remote_services = True
-    headers = (
-        {"Authorization": f"Bearer {vlm_settings.api_key}"}
-        if vlm_settings.api_key
-        else {}
-    )
-    pipeline_options.picture_description_options = PictureDescriptionApiOptions(
-        url=vlm_settings.api_url,
-        params={"model": vlm_settings.model},
-        headers=headers,
-        timeout=VLM_API_TIMEOUT_SECONDS,
-    )
+    pipeline_options.do_ocr = ocr_enabled
+
+    if vlm_enabled:
+        from docling.datamodel.pipeline_options import PictureDescriptionApiOptions
+
+        pipeline_options.do_picture_description = True
+        pipeline_options.enable_remote_services = True
+        headers = (
+            {"Authorization": f"Bearer {vlm_settings.api_key}"}
+            if vlm_settings.api_key
+            else {}
+        )
+        pipeline_options.picture_description_options = PictureDescriptionApiOptions(
+            url=vlm_settings.api_url,
+            params={"model": vlm_settings.model},
+            headers=headers,
+            timeout=VLM_API_TIMEOUT_SECONDS,
+        )
 
     return DocumentConverter(
         format_options={
@@ -118,6 +121,8 @@ class ConversionWorker(QThread):
         custom_filename: str,
         source_formats: dict[str, str] | None = None,
         vlm_settings: VlmSettings | None = None,
+        ocr_enabled: bool = True,
+        source_ocr_overrides: dict[str, bool] | None = None,
     ):
         super().__init__()
         self.sources = sources
@@ -126,9 +131,18 @@ class ConversionWorker(QThread):
         self.custom_filename = custom_filename
         self.source_formats = source_formats or {}
         self.vlm_settings = vlm_settings
+        self.ocr_enabled = ocr_enabled
+        self.source_ocr_overrides = source_ocr_overrides or {}
+        self._converters_by_ocr_setting: dict[bool, object] = {}
+
+    def _converter_for(self, ocr_enabled: bool):
+        if ocr_enabled not in self._converters_by_ocr_setting:
+            self._converters_by_ocr_setting[ocr_enabled] = _build_document_converter(
+                self.vlm_settings, ocr_enabled
+            )
+        return self._converters_by_ocr_setting[ocr_enabled]
 
     def run(self):
-        converter = _build_document_converter(self.vlm_settings)
         rows = []
         summary_lines = []
         first_preview = ""
@@ -143,6 +157,9 @@ class ConversionWorker(QThread):
             temp_dirs: list[Path] = []
 
             try:
+                effective_ocr = self.source_ocr_overrides.get(src_label, self.ocr_enabled)
+                converter = self._converter_for(effective_ocr)
+
                 format_label = self.source_formats.get(src_label)
                 item_fmt_info = (
                     FORMAT_OPTIONS[format_label]

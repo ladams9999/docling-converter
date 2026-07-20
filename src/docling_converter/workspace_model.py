@@ -98,6 +98,9 @@ class WorkspaceSettings:
     custom_filename: str = ""
     auto_filename_enabled: bool = True
     vlm_settings: VlmSettings = field(default_factory=VlmSettings)
+    # Matches docling's own PdfPipelineOptions.do_ocr default (True), so an
+    # existing workspace file with no ocr_enabled key behaves unchanged.
+    ocr_enabled: bool = True
 
     def to_dict(self) -> dict:
         return {
@@ -105,6 +108,7 @@ class WorkspaceSettings:
             "custom_filename": self.custom_filename,
             "auto_filename_enabled": self.auto_filename_enabled,
             "vlm_settings": self.vlm_settings.to_dict(),
+            "ocr_enabled": self.ocr_enabled,
         }
 
     @classmethod
@@ -114,6 +118,7 @@ class WorkspaceSettings:
             custom_filename=str(data.get("custom_filename", "")),
             auto_filename_enabled=bool(data.get("auto_filename_enabled", True)),
             vlm_settings=VlmSettings.from_dict(data.get("vlm_settings", {})),
+            ocr_enabled=_coerce_bool(data.get("ocr_enabled"), True),
         )
 
 
@@ -125,6 +130,9 @@ class WorkspaceData:
     target_dir: str = ""
     pending_sources: list[str] = field(default_factory=list)
     source_formats: dict[str, str] = field(default_factory=dict)
+    # Per-source OCR override -- only sources that differ from
+    # settings.ocr_enabled get an entry, same shape as source_formats.
+    source_ocr_overrides: dict[str, bool] = field(default_factory=dict)
     converted_items: list[ConvertedItem] = field(default_factory=list)
     settings: WorkspaceSettings = field(default_factory=WorkspaceSettings)
     wiki_imports: list[WikiImport] = field(default_factory=list)
@@ -135,6 +143,7 @@ class WorkspaceData:
             "target_dir": self.target_dir,
             "pending_sources": list(self.pending_sources),
             "source_formats": dict(self.source_formats),
+            "source_ocr_overrides": dict(self.source_ocr_overrides),
             "converted_items": [item.to_dict() for item in self.converted_items],
             "settings": self.settings.to_dict(),
             "wiki_imports": [item.to_dict() for item in self.wiki_imports],
@@ -149,6 +158,10 @@ class WorkspaceData:
             source_formats={
                 str(source): str(format_label)
                 for source, format_label in data.get("source_formats", {}).items()
+            },
+            source_ocr_overrides={
+                str(source): _coerce_bool(enabled, True)
+                for source, enabled in data.get("source_ocr_overrides", {}).items()
             },
             converted_items=[
                 ConvertedItem.from_dict(item)
