@@ -386,8 +386,8 @@ HTML starts with the same fields in a comment before the doctype or content.
 2. It creates `ConversionWorker` with the resolved queued sources, output
    directory, selected format, and optional custom filename.
 3. The worker converts each source and writes the output file.
-4. The main thread updates shared progress state, the workspace results table,
-   and the converted-history table from worker signals.
+4. The main thread updates shared progress state and the converted-history
+   table from worker signals.
 5. Successfully converted items are removed from the pending queue and stored in
    workspace history.
 6. Temporary files and PDF chunk directories are cleaned up after each source.
